@@ -1,0 +1,8 @@
+{
+  "name": "NextStep - 취업 전형 관리 비서",
+  "description": "취업 준비 과정에서 채용 공고, 전형 일정, D-Day, 체크리스트, 공부 계획을 한눈에 체계적으로 관리하는 웹서비스",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

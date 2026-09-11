@@ -1,0 +1,291 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import ApplicationCard from "../components/ApplicationCard.jsx";
+import DdayBadge from "../components/DdayBadge.jsx";
+import { api } from "../services/api.js";
+import { formatShortDate } from "../utils/dateUtils.js";
+
+const calendarWeekdays = ["일", "월", "화", "수", "목", "금", "토"];
+
+function Dashboard() {
+  const [dashboard, setDashboard] = useState(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const [error, setError] = useState("");
+
+  async function loadDashboard() {
+    setError("");
+    try {
+      setDashboard(await api.getDashboard());
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
+  async function toggleTask(task, completed) {
+    try {
+      await api.updateTask(task.id, { completed });
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function toggleStudyBlock(block) {
+    try {
+      const plan = block.studyPlanId
+        ? await api.getStudyPlanById(block.studyPlanId)
+        : await api.getStudyPlan(block.applicationId);
+      const nextPlan = {
+        ...plan,
+        days: plan.days.map((day) => day.date === block.date
+          ? { ...day, blocks: day.blocks.map((item) => item.id === block.id ? { ...item, completed: true } : item) }
+          : day)
+      };
+      if (block.studyPlanId) await api.updateStudyPlanById(block.studyPlanId, nextPlan);
+      else await api.updateStudyPlan(block.applicationId, nextPlan);
+      await loadDashboard();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  const calendarDays = useMemo(() => buildCalendarDays(calendarMonth), [calendarMonth]);
+  const eventsByDate = useMemo(() => {
+    const map = new Map();
+    (dashboard?.calendarEvents || []).forEach((event) => {
+      const date = formatShortDate(event.date);
+      map.set(date, [...(map.get(date) || []), event]);
+    });
+    return map;
+  }, [dashboard]);
+
+  if (error) return <p className="error">{error}</p>;
+  if (!dashboard) return <p>한눈에 보기 화면을 불러오는 중입니다.</p>;
+
+  return (
+    <section className="dashboard-page">
+      <div className="page-title dashboard-title">
+        <div>
+          <p className="eyebrow">Today Workspace</p>
+          <h1>한눈에 보기</h1>
+          <p>지원 일정, 오늘 할 일, 공부 계획을 한 화면에서 확인하세요.</p>
+        </div>
+        <Link className="button" to="/analyze/pdf">자료 분석하기</Link>
+      </div>
+
+      <div className="summary-grid dashboard-summary">
+        <div className="metric"><span>진행 중 지원</span><strong>{dashboard.activeCount}</strong></div>
+        <div className="metric"><span>7일 이내 일정</span><strong>{dashboard.weekDeadlines.length}</strong></div>
+        <div className="metric"><span>오늘 할 일</span><strong>{dashboard.todayTasks.length}</strong></div>
+        <div className="metric"><span>3일 이내 할 일</span><strong>{dashboard.threeDayTasks.length}</strong></div>
+      </div>
+
+      {dashboard.nearestEvent && (
+        <section className="panel highlight nearest-event">
+          <div>
+            <p className="eyebrow">Next Event</p>
+            <h2>가장 가까운 일정</h2>
+          </div>
+          <p>
+            <strong>{dashboard.nearestEvent.company}</strong>
+            <span>{dashboard.nearestEvent.type}</span>
+            <DdayBadge date={dashboard.nearestEvent.date} />
+          </p>
+        </section>
+      )}
+
+      <div className="two-column dashboard-top-grid">
+        <section className="panel calendar-panel">
+          <div className="section-header compact">
+            <div>
+              <h2>전형 일정</h2>
+              <p className="muted">지원 마감, 필기시험, 면접일을 모두 표시합니다.</p>
+            </div>
+            <div className="calendar-nav">
+              <button className="icon-button" aria-label="이전 달" onClick={() => shiftMonth(setCalendarMonth, -1)} type="button">‹</button>
+              <strong>{calendarMonth.getFullYear()}년 {calendarMonth.getMonth() + 1}월</strong>
+              <button className="icon-button" aria-label="다음 달" onClick={() => shiftMonth(setCalendarMonth, 1)} type="button">›</button>
+            </div>
+          </div>
+          <div className="calendar-grid calendar-weekdays">
+            {calendarWeekdays.map((day) => <strong key={day}>{day}</strong>)}
+          </div>
+          <div className="calendar-grid">
+            {calendarDays.map((day) => (
+              <div className={`calendar-day ${day.inMonth ? "" : "outside"}`} key={day.key}>
+                <span className="calendar-date">{day.date.getDate()}</span>
+                {(eventsByDate.get(day.key) || []).map((event) => (
+                  <Link
+                    className={`calendar-event ${getCalendarEventClass(event.type)}`}
+                    key={`${event.applicationId}-${event.type}`}
+                    title={`${event.company} · ${event.type}`}
+                    to={`/applications/${event.applicationId}`}
+                  >
+                    <b>{event.type}</b>
+                    <span>{event.company}</span>
+                  </Link>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="calendar-legend">
+            <span><i className="legend-dot deadline" />마감</span>
+            <span><i className="legend-dot written" />필기</span>
+            <span><i className="legend-dot interview" />면접</span>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="section-header compact">
+            <div>
+              <h2>오늘의 공부 계획</h2>
+              <p className="muted">오늘 날짜에 배정된 공부 항목입니다.</p>
+            </div>
+            <Link className="button secondary" to={dashboard.studyPlanApplicationId ? `/applications/${dashboard.studyPlanApplicationId}/study-plan` : "/study-plans"}>공부계획 보기</Link>
+          </div>
+          <StudyChecklist items={dashboard.studyChecklist || []} onToggle={toggleStudyBlock} />
+        </section>
+      </div>
+
+      <div className="two-column">
+        <section className="panel">
+          <h2>오늘 해야 할 일</h2>
+          <SimpleTaskList tasks={dashboard.todayTasks} onToggle={toggleTask} />
+        </section>
+        <section className="panel">
+          <h2>긴급 체크리스트</h2>
+          <SimpleTaskList tasks={dashboard.urgentTasks} onToggle={toggleTask} />
+        </section>
+      </div>
+
+      <section className="panel checklist-overview">
+        <div className="section-header compact">
+          <div>
+            <h2>공고별 체크리스트</h2>
+            <p className="muted">등록된 지원 공고의 체크리스트를 한 곳에서 확인합니다.</p>
+          </div>
+        </div>
+        <div className="checklist-groups">
+          {(dashboard.checklists || []).map((group) => (
+            <article className="checklist-group" key={group.applicationId}>
+              <div className="checklist-group-header">
+                <div>
+                  <strong>{group.company}</strong>
+                  <span>{group.position || "직무 미입력"} · {group.stage}</span>
+                </div>
+                <Link className="text-link" to={`/applications/${group.applicationId}`}>상세 보기</Link>
+              </div>
+              <ul className="overview-task-list">
+                {group.tasks.map((task) => (
+                  <li className={task.completed ? "done" : ""} key={task.id}>
+                    <input className="task-check-input" type="checkbox" checked={Boolean(task.completed)} aria-label={`${task.title} 완료`} onChange={(event) => toggleTask(task, event.target.checked)} />
+                    <span>{task.title}</span>
+                    <small>{task.category}</small>
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+          {!(dashboard.checklists || []).length && <p className="empty">등록된 체크리스트가 없습니다.</p>}
+        </div>
+      </section>
+
+      <div className="section-header dashboard-section-title">
+        <div>
+          <h2>지원 공고별 일정</h2>
+          <p className="muted">입력된 지원마감, 필기시험, 면접일을 공고별로 확인합니다.</p>
+        </div>
+      </div>
+      <div className="card-grid">
+        {dashboard.stages.map((item) => (
+          <ApplicationCard key={item.id} application={item} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SimpleTaskList({ tasks, onToggle }) {
+  if (!tasks.length) return <p className="empty">표시할 항목이 없습니다.</p>;
+
+  return (
+    <ul className="clean-list task-summary-list">
+      {tasks.map((task) => (
+        <li key={task.id}>
+          <label className="task-summary-item">
+            <input
+              type="checkbox"
+              checked={task.completed}
+              onChange={(event) => onToggle(task, event.target.checked)}
+            />
+            <span>
+              {task.company && <strong>{task.company} · </strong>}
+              {task.title}
+            </span>
+          </label>
+          <DdayBadge date={task.dueDate} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function buildCalendarDays(month) {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const start = new Date(month.getFullYear(), month.getMonth(), 1 - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    return { date, key: formatLocalDate(date), inMonth: date.getMonth() === month.getMonth() };
+  });
+}
+
+function formatLocalDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getCalendarEventClass(type) {
+  if (type === "필기시험") return "written";
+  if (type === "면접") return "interview";
+  return "deadline";
+}
+
+function shiftMonth(setMonth, amount) {
+  setMonth((month) => new Date(month.getFullYear(), month.getMonth() + amount, 1));
+}
+
+function StudyChecklist({ items, onToggle }) {
+  if (!items.length) return <p className="empty">오늘 등록된 공부계획이 없습니다.</p>;
+  return (
+    <ul className="clean-list study-checklist">
+      {items.map((item) => (
+        <li key={item.id}>
+          <label className="task-summary-item">
+            <input type="checkbox" onChange={() => onToggle(item)} />
+            <span>
+              <strong>{item.company || item.examName || "개인 시험"}</strong>
+              <small>{item.subject || "기타"}{item.materialName ? ` · ${item.materialName}` : ""}</small>
+              <small>{item.studyMethod || item.method || "공부"}{item.studyRange ? ` · ${item.studyRange}` : ""}{item.hours ? ` · ${formatStudyHours(item.hours)}시간` : ""}</small>
+            </span>
+          </label>
+          <time>{formatShortDate(item.date)}</time>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function formatStudyHours(hours) {
+  const value = Number(hours);
+  if (!Number.isFinite(value)) return hours;
+  return value.toFixed(1);
+}
+
+export default Dashboard;
