@@ -39,11 +39,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewAppModal, isMobileOpe
     },
     {
       id: 'analyze',
-      label: '자료 분석',
-      sublabel: 'PDF/이미지 AI 추출',
+      label: '공고문·안내문 AI 분석',
+      sublabel: '전형 일정 자동 추출',
       icon: IconFileSearch,
-      badge: 'AI',
-      badgeColor: 'bg-indigo-100 text-indigo-700',
+      badge: 'AI 분석',
+      badgeColor: 'bg-blue-100 text-blue-700 font-bold',
     },
     {
       id: 'study',

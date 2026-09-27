@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Application, Task, StudyPlan, Credential, UserProfile, ApplicationStage } from '../types/index.ts';
+import { Application, Task, StudyPlan, StudyBlock, Credential, UserProfile, ApplicationStage } from '../types/index.ts';
 import {
   loadApplications,
   saveApplications,
@@ -34,12 +34,19 @@ interface AppContextType {
   
   // Task Actions
   addTask: (task: Omit<Task, 'id' | 'createdAt'>) => void;
+  updateTask: (id: string, updates: Partial<Task>) => void;
   toggleTask: (id: string) => void;
   deleteTask: (id: string) => void;
   
   // Study Plan Actions
   addStudyPlan: (plan: Omit<StudyPlan, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  updateStudyPlan: (id: string, updates: Partial<StudyPlan>) => void;
   toggleStudyBlock: (planId: string, blockId: string) => void;
+  updateStudyBlock: (planId: string, blockId: string, updates: Partial<StudyBlock>) => void;
+  addStudyBlock: (planId: string, dayDate: string, block: Omit<StudyBlock, 'id' | 'completed'>) => void;
+  deleteStudyBlock: (planId: string, blockId: string) => void;
+  addStudyDay: (planId: string, date: string, dayOfWeek: string) => void;
+  deleteStudyDay: (planId: string, dayDate: string) => void;
   deleteStudyPlan: (id: string) => void;
 
   // Credential Actions
@@ -115,11 +122,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateApplication = (id: string, updates: Partial<Application>) => {
     setApplications(prev =>
-      prev.map(app =>
-        app.id === id
-          ? { ...app, ...updates, updatedAt: new Date().toISOString().split('T')[0] }
-          : app
-      )
+      prev.map(app => {
+        if (app.id !== id) return app;
+        const updated = { ...app, ...updates, updatedAt: new Date().toISOString().split('T')[0] };
+        if ('imageUrl' in updates && (!updates.imageUrl || updates.imageUrl === '')) {
+          delete (updated as any).imageUrl;
+        }
+        return updated;
+      })
     );
   };
 
@@ -158,6 +168,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTasks(prev => [newTask, ...prev]);
   };
 
+  const updateTask = (id: string, updates: Partial<Task>) => {
+    setTasks(prev =>
+      prev.map(task => (task.id === id ? { ...task, ...updates } : task))
+    );
+  };
+
   const toggleTask = (id: string) => {
     setTasks(prev =>
       prev.map(task => (task.id === id ? { ...task, completed: !task.completed } : task))
@@ -178,6 +194,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudyPlans(prev => [newPlan, ...prev]);
   };
 
+  const updateStudyPlan = (id: string, updates: Partial<StudyPlan>) => {
+    setStudyPlans(prev =>
+      prev.map(plan =>
+        plan.id === id
+          ? { ...plan, ...updates, updatedAt: new Date().toISOString().split('T')[0] }
+          : plan
+      )
+    );
+  };
+
   const toggleStudyBlock = (planId: string, blockId: string) => {
     setStudyPlans(prev =>
       prev.map(plan => {
@@ -194,7 +220,93 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return { ...day, blocks: newBlocks };
         });
         if (!blockFound) return plan;
-        return { ...plan, days: newDays };
+        return { ...plan, days: newDays, updatedAt: new Date().toISOString().split('T')[0] };
+      })
+    );
+  };
+
+  const updateStudyBlock = (planId: string, blockId: string, updates: Partial<StudyBlock>) => {
+    setStudyPlans(prev =>
+      prev.map(plan => {
+        if (plan.id !== planId) return plan;
+        let modified = false;
+        const newDays = plan.days.map(day => {
+          const newBlocks = day.blocks.map(b => {
+            if (b.id === blockId) {
+              modified = true;
+              return { ...b, ...updates };
+            }
+            return b;
+          });
+          return { ...day, blocks: newBlocks };
+        });
+        if (!modified) return plan;
+        return { ...plan, days: newDays, updatedAt: new Date().toISOString().split('T')[0] };
+      })
+    );
+  };
+
+  const addStudyBlock = (planId: string, dayDate: string, blockData: Omit<StudyBlock, 'id' | 'completed'>) => {
+    const newBlock: StudyBlock = {
+      ...blockData,
+      id: `b-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      completed: false,
+    };
+    setStudyPlans(prev =>
+      prev.map(plan => {
+        if (plan.id !== planId) return plan;
+        let dayFound = false;
+        const newDays = plan.days.map(day => {
+          if (day.date === dayDate) {
+            dayFound = true;
+            return { ...day, blocks: [...day.blocks, newBlock] };
+          }
+          return day;
+        });
+        if (!dayFound) return plan;
+        return { ...plan, days: newDays, updatedAt: new Date().toISOString().split('T')[0] };
+      })
+    );
+  };
+
+  const deleteStudyBlock = (planId: string, blockId: string) => {
+    setStudyPlans(prev =>
+      prev.map(plan => {
+        if (plan.id !== planId) return plan;
+        const newDays = plan.days.map(day => ({
+          ...day,
+          blocks: day.blocks.filter(b => b.id !== blockId),
+        }));
+        return { ...plan, days: newDays, updatedAt: new Date().toISOString().split('T')[0] };
+      })
+    );
+  };
+
+  const addStudyDay = (planId: string, date: string, dayOfWeek: string) => {
+    setStudyPlans(prev =>
+      prev.map(plan => {
+        if (plan.id !== planId) return plan;
+        if (plan.days.some(d => d.date === date)) return plan;
+        const newDay = {
+          date,
+          dayOfWeek,
+          blocks: [],
+        };
+        const newDays = [...plan.days, newDay].sort((a, b) => a.date.localeCompare(b.date));
+        return { ...plan, days: newDays, updatedAt: new Date().toISOString().split('T')[0] };
+      })
+    );
+  };
+
+  const deleteStudyDay = (planId: string, dayDate: string) => {
+    setStudyPlans(prev =>
+      prev.map(plan => {
+        if (plan.id !== planId) return plan;
+        return {
+          ...plan,
+          days: plan.days.filter(d => d.date !== dayDate),
+          updatedAt: new Date().toISOString().split('T')[0],
+        };
       })
     );
   };
@@ -242,10 +354,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateApplicationStage,
         toggleRequiredDoc,
         addTask,
+        updateTask,
         toggleTask,
         deleteTask,
         addStudyPlan,
+        updateStudyPlan,
         toggleStudyBlock,
+        updateStudyBlock,
+        addStudyBlock,
+        deleteStudyBlock,
+        addStudyDay,
+        deleteStudyDay,
         deleteStudyPlan,
         addCredential,
         deleteCredential,

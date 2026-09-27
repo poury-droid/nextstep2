@@ -13,7 +13,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, onOpenNewApp
   const tabTitles: Record<string, { title: string; desc: string }> = {
     dashboard: { title: '한눈에 보기', desc: '전형 일정, D-Day, 오늘 할 일과 공부 계획을 한눈에 파악하세요.' },
     applications: { title: '지원 공고 관리', desc: '기업별 서류, 코딩테스트, 면접 일정과 전형 단계를 체계적으로 관리합니다.' },
-    analyze: { title: '자료 분석 (AI)', desc: '채용 공고 PDF나 이미지를 업로드하면 주요 일정과 자격을 자동으로 추출합니다.' },
+    analyze: { title: '공고문 / 안내문 AI 분석', desc: '채용 공고 포스터, 모집 요강 캡처 사진, 어학 성적표를 AI가 분석하여 전형 일정과 필요 서류를 자동으로 추출합니다.' },
     study: { title: '공부 플래너', desc: '시험 날짜와 공부 가능 시간에 맞춰 최적의 데일리 학습 일정을 생성합니다.' },
     credentials: { title: '내 자격증 & 어학', desc: '보유한 공인 어학 성적과 자격증의 유효기간과 취득 현황을 관리합니다.' },
   };
@@ -58,17 +58,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, onOpenNewApp
         >
           데이터 초기화
         </button>
-
-        {currentTab !== 'analyze' && (
-          <button
-            type="button"
-            onClick={() => setCurrentTab('analyze')}
-            className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg border border-indigo-200 transition-colors"
-          >
-            <IconSparkles className="w-3.5 h-3.5" />
-            공고 AI 분석
-          </button>
-        )}
 
         <button
           type="button"

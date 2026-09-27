@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { DDayBadge } from '../components/DDayBadge.tsx';
 import { HomeCalendar } from '../components/HomeCalendar.tsx';
+import { OcrJobRegistrationModal } from '../components/OcrJobRegistrationModal.tsx';
+import { VISUAL_SAMPLES, VisualSampleDoc } from '../utils/samplePosters.ts';
 import { getDDay, getTodayString } from '../utils/date.ts';
 import {
   IconBriefcase,
@@ -10,9 +12,15 @@ import {
   IconBookOpen,
   IconPlus,
   IconChevronRight,
-  IconSparkles,
   IconCalendar,
   IconCheckCircle2,
+  IconEdit3,
+  IconTrash2,
+  IconCheck,
+  IconX,
+  IconScan,
+  IconSparkles,
+  IconUploadCloud,
 } from '../components/Icons.tsx';
 
 interface DashboardPageProps {
@@ -24,9 +32,57 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   onSelectApplication,
   onOpenNewAppModal,
 }) => {
-  const { applications, tasks, toggleTask, addTask, studyPlans, toggleStudyBlock, setCurrentTab } = useApp();
+  const {
+    applications,
+    tasks,
+    toggleTask,
+    addTask,
+    updateTask,
+    deleteTask,
+    studyPlans,
+    toggleStudyBlock,
+    setCurrentTab,
+  } = useApp();
 
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editTaskTitle, setEditTaskTitle] = useState('');
+  const [editTaskDueDate, setEditTaskDueDate] = useState('');
+
+  // OCR Fast Register state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isOcrModalOpen, setIsOcrModalOpen] = useState(false);
+  const [ocrInitialImageFile, setOcrInitialImageFile] = useState<File | null>(null);
+  const [ocrInitialImageDataUrl, setOcrInitialImageDataUrl] = useState<string | null>(null);
+  const [ocrInitialFileName, setOcrInitialFileName] = useState<string | null>(null);
+  const [isDraggingOnDashboard, setIsDraggingOnDashboard] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleOpenOcrWithFile = (file: File) => {
+    setOcrInitialImageFile(file);
+    setOcrInitialImageDataUrl(null);
+    setOcrInitialFileName(file.name);
+    setIsOcrModalOpen(true);
+  };
+
+  const handleOpenOcrWithSample = (sample: VisualSampleDoc) => {
+    setOcrInitialImageFile(null);
+    setOcrInitialImageDataUrl(sample.previewDataUrl);
+    setOcrInitialFileName(sample.fileName);
+    setIsOcrModalOpen(true);
+  };
+
+  const handleRegistered = (newAppId: string) => {
+    const registeredApp = applications.find(a => a.id === newAppId);
+    const companyName = registeredApp ? registeredApp.company : '채용';
+    setToastMessage(`🎉 [${companyName}] 공고가 AI 분석으로 성공적으로 등록되었습니다!`);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4500);
+
+    // Open detail of the newly registered app
+    onSelectApplication(newAppId);
+  };
 
   // Collect all upcoming schedule items across all applications
   const upcomingSchedules = applications
@@ -131,13 +187,28 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => onSelectApplication(nearestSchedule.app.id)}
-              className="self-start sm:self-center px-4 py-2.5 rounded-xl bg-white text-blue-900 text-xs sm:text-sm font-bold shadow-xs hover:bg-blue-50 transition-colors shrink-0"
-            >
-              공고 및 체크리스트 확인
-            </button>
+            <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setOcrInitialImageFile(null);
+                  setOcrInitialImageDataUrl(null);
+                  setOcrInitialFileName(null);
+                  setIsOcrModalOpen(true);
+                }}
+                className="px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs sm:text-sm font-bold border border-white/20 transition-colors flex items-center gap-1.5 shrink-0"
+              >
+                <IconScan className="w-4 h-4 text-cyan-300" />
+                <span>공고문 AI 분석 등록</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectApplication(nearestSchedule.app.id)}
+                className="px-4 py-2.5 rounded-xl bg-white text-blue-900 text-xs sm:text-sm font-bold shadow-xs hover:bg-blue-50 transition-colors shrink-0"
+              >
+                공고 및 체크리스트 확인
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -211,6 +282,107 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         </div>
       </div>
 
+      {/* AI Job Posting Fast Register Banner */}
+      <div
+        onDragOver={e => {
+          e.preventDefault();
+          setIsDraggingOnDashboard(true);
+        }}
+        onDragLeave={() => setIsDraggingOnDashboard(false)}
+        onDrop={e => {
+          e.preventDefault();
+          setIsDraggingOnDashboard(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file && file.type.startsWith('image/')) {
+            handleOpenOcrWithFile(file);
+          }
+        }}
+        className={`relative overflow-hidden rounded-2xl border-2 transition-all p-5 sm:p-6 shadow-xs ${
+          isDraggingOnDashboard
+            ? 'border-blue-500 bg-blue-50/70 ring-4 ring-blue-500/20 scale-[1.005]'
+            : 'border-blue-200/80 bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-white hover:border-blue-300'
+        }`}
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+          <div className="space-y-2.5 max-w-2xl">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-blue-600 text-white tracking-wide shadow-2xs">
+                <IconScan className="w-3.5 h-3.5" />
+                공고문 / 안내문 AI 분석
+              </span>
+              <span className="text-xs font-semibold text-blue-800">
+                AI 시각 분석
+              </span>
+            </div>
+
+            <div>
+              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                공고문·안내문 일정 자동 등록
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                공고문 사진이나 텍스트를 올리면 주요 전형 일정을 자동으로 추출하여 등록합니다.
+              </p>
+            </div>
+
+            {/* Quick Sample Chips for Instant 1-Click Testing */}
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              <span className="text-xs font-bold text-slate-500">샘플:</span>
+              {VISUAL_SAMPLES.filter(s => s.category === 'job_posting').slice(0, 3).map(sample => (
+                <button
+                  key={sample.id}
+                  type="button"
+                  onClick={() => handleOpenOcrWithSample(sample)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-800 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-2xs"
+                >
+                  <span>{sample.name.replace(' 채용 포스터', '')}</span>
+                  <IconSparkles className="w-3 h-3 opacity-70" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Buttons & Hidden File Input */}
+          <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-2 shrink-0">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleOpenOcrWithFile(file);
+                }
+                if (e.target) e.target.value = '';
+              }}
+              className="hidden"
+            />
+
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-black shadow-md shadow-blue-500/25 transition-all cursor-pointer"
+            >
+              <IconScan className="w-4 h-4" />
+              <span>공고문 사진 올려서 등록</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOcrInitialImageFile(null);
+                setOcrInitialImageDataUrl(null);
+                setOcrInitialFileName(null);
+                setIsOcrModalOpen(true);
+              }}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-2xs"
+            >
+              <IconUploadCloud className="w-3.5 h-3.5 text-blue-600" />
+              <span>공고문 / 안내문 분석창 열기</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Monthly Interactive Calendar */}
       <HomeCalendar
         onSelectApplication={onSelectApplication}
@@ -223,24 +395,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         <div className="lg:col-span-2 space-y-6">
           {/* Upcoming Schedule Timeline */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-2xs">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <IconClock className="w-4 h-4 text-blue-600" />
-                  다가오는 전형 D-Day 일정표
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  입력된 서류 마감, 필기시험, 면접일이 자동으로 집계됩니다.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onOpenNewAppModal}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-              >
-                <IconPlus className="w-3.5 h-3.5" />
-                일정 추가
-              </button>
+            <div className="mb-4">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <IconClock className="w-4 h-4 text-blue-600" />
+                다가오는 전형 D-Day 일정표
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                입력된 서류 마감, 필기시험, 면접일이 자동으로 집계됩니다.
+              </p>
             </div>
 
             <div className="space-y-2.5">
@@ -366,34 +528,128 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             </form>
 
             <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-              {tasks.map(task => (
-                <label
-                  key={task.id}
-                  className="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50/80 cursor-pointer transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    checked={task.completed}
-                    onChange={() => toggleTask(task.id)}
-                    className="mt-0.5 w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p
-                      className={`text-xs leading-snug ${
-                        task.completed ? 'line-through text-slate-400 font-normal' : 'text-slate-800 font-medium'
-                      }`}
+              {tasks.map(task => {
+                const isEditing = editingTaskId === task.id;
+
+                if (isEditing) {
+                  return (
+                    <div
+                      key={task.id}
+                      className="p-2.5 rounded-xl border-2 border-blue-400 bg-blue-50/40 shadow-xs space-y-2 animate-in fade-in duration-150"
                     >
-                      {task.title}
-                    </p>
-                    {task.applicationName && (
-                      <span className="inline-block text-[10px] text-blue-600 font-semibold mt-1">
-                        {task.applicationName}
-                      </span>
-                    )}
+                      <input
+                        type="text"
+                        value={editTaskTitle}
+                        onChange={e => setEditTaskTitle(e.target.value)}
+                        placeholder="할 일 내용"
+                        autoFocus
+                        className="w-full text-xs font-medium px-2.5 py-1.5 border border-blue-300 rounded-lg bg-white focus:outline-hidden"
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (editTaskTitle.trim()) {
+                              updateTask(task.id, {
+                                title: editTaskTitle.trim(),
+                                dueDate: editTaskDueDate,
+                              });
+                              setEditingTaskId(null);
+                            }
+                          } else if (e.key === 'Escape') {
+                            setEditingTaskId(null);
+                          }
+                        }}
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <input
+                          type="date"
+                          value={editTaskDueDate}
+                          onChange={e => setEditTaskDueDate(e.target.value)}
+                          className="text-xs px-2 py-1 border border-slate-200 rounded-lg bg-white text-slate-700 focus:outline-hidden"
+                        />
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingTaskId(null)}
+                            className="px-2 py-1 text-xs font-semibold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                          >
+                            취소
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (editTaskTitle.trim()) {
+                                updateTask(task.id, {
+                                  title: editTaskTitle.trim(),
+                                  dueDate: editTaskDueDate,
+                                });
+                                setEditingTaskId(null);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-2xs"
+                          >
+                            <IconCheck className="w-3.5 h-3.5" />
+                            저장
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div
+                    key={task.id}
+                    className="group flex items-start justify-between gap-2 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50/80 transition-colors"
+                  >
+                    <label className="flex items-start gap-2.5 flex-1 min-w-0 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={task.completed}
+                        onChange={() => toggleTask(task.id)}
+                        className="mt-0.5 w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className={`text-xs leading-snug ${
+                            task.completed ? 'line-through text-slate-400 font-normal' : 'text-slate-800 font-medium'
+                          }`}
+                        >
+                          {task.title}
+                        </p>
+                        {task.applicationName && (
+                          <span className="inline-block text-[10px] text-blue-600 font-semibold mt-0.5">
+                            {task.applicationName}
+                          </span>
+                        )}
+                      </div>
+                    </label>
+
+                    <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                      {task.dueDate && <DDayBadge dateStr={task.dueDate} size="sm" />}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingTaskId(task.id);
+                          setEditTaskTitle(task.title);
+                          setEditTaskDueDate(task.dueDate || '');
+                        }}
+                        className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors opacity-70 group-hover:opacity-100"
+                        title="수정"
+                      >
+                        <IconEdit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteTask(task.id)}
+                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors opacity-70 group-hover:opacity-100"
+                        title="삭제"
+                      >
+                        <IconTrash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  {task.dueDate && <DDayBadge dateStr={task.dueDate} size="sm" />}
-                </label>
-              ))}
+                );
+              })}
 
               {tasks.length === 0 && (
                 <p className="text-xs text-slate-400 py-6 text-center">등록된 할 일이 없습니다.</p>
@@ -465,6 +721,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Floating Success Toast */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl border border-slate-700 flex items-center gap-3 text-xs sm:text-sm font-bold">
+            <IconCheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+            <button
+              type="button"
+              onClick={() => setToastMessage(null)}
+              className="text-slate-400 hover:text-white p-1 rounded-md"
+            >
+              <IconX className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* OCR Job Registration Modal */}
+      <OcrJobRegistrationModal
+        isOpen={isOcrModalOpen}
+        onClose={() => setIsOcrModalOpen(false)}
+        initialImageFile={ocrInitialImageFile}
+        initialImageDataUrl={ocrInitialImageDataUrl}
+        initialFileName={ocrInitialFileName}
+        onRegistered={handleRegistered}
+      />
     </div>
   );
 };

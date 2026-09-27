@@ -36,12 +36,11 @@ export interface CalendarEventItem {
 
 interface HomeCalendarProps {
   onSelectApplication: (id: string) => void;
-  onOpenNewAppModal: () => void;
+  onOpenNewAppModal?: () => void;
 }
 
 export const HomeCalendar: React.FC<HomeCalendarProps> = ({
   onSelectApplication,
-  onOpenNewAppModal,
 }) => {
   const { applications, tasks, toggleTask } = useApp();
 
@@ -296,15 +295,6 @@ export const HomeCalendar: React.FC<HomeCalendarProps> = ({
               <IconChevronRight className="w-4 h-4" />
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={onOpenNewAppModal}
-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-2xs"
-          >
-            <IconPlus className="w-3.5 h-3.5" />
-            새 일정 등록
-          </button>
         </div>
       </div>
 
@@ -561,28 +551,9 @@ export const HomeCalendar: React.FC<HomeCalendarProps> = ({
                   <p className="text-xs text-slate-500 font-medium">
                     이 날짜에 등록된 전형 일정이 없습니다.
                   </p>
-                  <button
-                    type="button"
-                    onClick={onOpenNewAppModal}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline"
-                  >
-                    + 이 날짜에 새 일정 추가하기
-                  </button>
                 </div>
               )}
             </div>
-          </div>
-
-          {/* Quick Add Schedule CTA in right box */}
-          <div className="pt-3 border-t border-slate-200/80 mt-3">
-            <button
-              type="button"
-              onClick={onOpenNewAppModal}
-              className="w-full py-2.5 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-2xs"
-            >
-              <IconPlus className="w-3.5 h-3.5 text-blue-600" />
-              새 전형 공고 및 일정 등록
-            </button>
           </div>
         </div>
       </div>

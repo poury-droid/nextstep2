@@ -39,9 +39,19 @@ export const ApplicationCard: React.FC<ApplicationCardProps> = ({ application, o
       <div>
         <div className="flex items-start justify-between gap-3 mb-2.5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-              {application.company.slice(0, 2)}
-            </div>
+            {application.imageUrl ? (
+              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center group-hover:ring-2 group-hover:ring-blue-500/30 transition-all">
+                <img
+                  src={application.imageUrl}
+                  alt={application.company}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors shrink-0">
+                {application.company.slice(0, 2)}
+              </div>
+            )}
             <div>
               <h3 className="font-bold text-slate-900 text-base leading-tight group-hover:text-blue-600 transition-colors">
                 {application.company}
@@ -90,6 +100,31 @@ export const ApplicationCard: React.FC<ApplicationCardProps> = ({ application, o
               <span>{application.location}</span>
             </div>
           )}
+
+          {application.stageNotices && application.stageNotices.length > 0 && (() => {
+            const allChecklistItems = application.stageNotices.flatMap(n => n.checklistItems || []);
+            const checkedCount = allChecklistItems.filter(i => i.checked).length;
+            const totalCount = allChecklistItems.length;
+            const stagesWithNotices = Array.from(new Set(application.stageNotices.map(n => n.stage)));
+            return (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <div className="flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 text-emerald-800 text-xs font-medium">
+                  <span>💬 안내문 {application.stageNotices.length}건</span>
+                  {totalCount > 0 && (
+                    <span className="font-bold">• 체크 {checkedCount}/{totalCount}</span>
+                  )}
+                </div>
+                {stagesWithNotices.map(st => (
+                  <span
+                    key={st}
+                    className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200/60"
+                  >
+                    {st}
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { Credential } from '../types/index.ts';
 import { DDayBadge } from '../components/DDayBadge.tsx';
+import { ImageLightboxModal } from '../components/ImageLightboxModal.tsx';
 import {
   IconAward,
   IconPlus,
@@ -9,6 +10,10 @@ import {
   IconClock,
   IconCheckCircle2,
   IconX,
+  IconImage,
+  IconMaximize2,
+  IconZoomIn,
+  IconUploadCloud,
 } from '../components/Icons.tsx';
 
 export const CredentialsPage: React.FC = () => {
@@ -22,6 +27,31 @@ export const CredentialsPage: React.FC = () => {
   const [acquiredDate, setAcquiredDate] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [memo, setMemo] = useState('');
+  const [imageUrl, setImageUrl] = useState<string>('');
+
+  // Lightbox state
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+  const [lightboxTitle, setLightboxTitle] = useState('');
+  const [lightboxSubtitle, setLightboxSubtitle] = useState('');
+
+  const openPhotoViewer = (cred: Credential) => {
+    if (!cred.imageUrl) return;
+    setLightboxImageUrl(cred.imageUrl);
+    setLightboxTitle(`${cred.name} 공식 성적표 / 자격증 사본`);
+    setLightboxSubtitle(`${cred.issuer || '공식 발급처'} · ${cred.score || cred.grade || '취득'}`);
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setImageUrl(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +64,7 @@ export const CredentialsPage: React.FC = () => {
       issuer: issuer.trim(),
       acquiredDate,
       expiresAt,
+      imageUrl: imageUrl || undefined,
       memo: memo.trim(),
     });
 
@@ -44,6 +75,7 @@ export const CredentialsPage: React.FC = () => {
     setIssuer('');
     setAcquiredDate('');
     setExpiresAt('');
+    setImageUrl('');
     setMemo('');
   };
 
@@ -140,6 +172,33 @@ export const CredentialsPage: React.FC = () => {
                 <p className="text-xs text-slate-500 bg-amber-50/40 p-2.5 rounded-lg border border-amber-100/60 mt-3 leading-relaxed">
                   {cred.memo}
                 </p>
+              )}
+
+              {/* Document Photo Section */}
+              {cred.imageUrl ? (
+                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => openPhotoViewer(cred)}
+                    className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors group"
+                  >
+                    <div className="w-6 h-6 rounded-md bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
+                      <img src={cred.imageUrl} alt={cred.name} className="w-full h-full object-cover" />
+                    </div>
+                    <span>성적표 원본 사진 보기</span>
+                    <IconMaximize2 className="w-3 h-3 group-hover:scale-110 transition-transform" />
+                  </button>
+                  <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-md font-semibold">
+                    사진 첨부됨
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                  <span className="flex items-center gap-1">
+                    <IconImage className="w-3 h-3 text-slate-300" />
+                    성적표 사진 미등록
+                  </span>
+                </div>
               )}
             </div>
           </div>
@@ -255,6 +314,34 @@ export const CredentialsPage: React.FC = () => {
               </div>
 
               <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  성적표 / 자격증 사본 사진 (선택)
+                </label>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors">
+                    <IconUploadCloud className="w-4 h-4 text-slate-500" />
+                    <span>성적표 사진 선택</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                  {imageUrl ? (
+                    <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                      <IconCheckCircle2 className="w-3.5 h-3.5" />
+                      사진 첨부 완료
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400">
+                      PNG, JPG 이미지 첨부 가능
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">메모</label>
                 <textarea
                   rows={2}
@@ -284,6 +371,15 @@ export const CredentialsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Fullscreen Photo Lightbox Modal */}
+      <ImageLightboxModal
+        isOpen={!!lightboxImageUrl}
+        onClose={() => setLightboxImageUrl(null)}
+        imageUrl={lightboxImageUrl}
+        title={lightboxTitle}
+        subtitle={lightboxSubtitle}
+      />
     </div>
   );
 };

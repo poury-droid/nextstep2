@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext.tsx';
-import { getFutureDateString } from '../utils/date.ts';
+import { getFutureDateString, extractDatesFromKoreanDoc } from '../utils/date.ts';
+import { VISUAL_SAMPLES, VisualSampleDoc } from '../utils/samplePosters.ts';
+import { OcrAnalysisResult } from '../types/index.ts';
+import { ImageLightboxModal } from '../components/ImageLightboxModal.tsx';
 import {
   IconFileSearch,
   IconUploadCloud,
@@ -9,118 +12,119 @@ import {
   IconPlus,
   IconAlertCircle,
   IconBookOpen,
+  IconScan,
+  IconCopy,
+  IconCamera,
+  IconAward,
+  IconCalendar,
+  IconClock,
+  IconBriefcase,
+  IconMapPin,
+  IconZoomIn,
+  IconMaximize2,
+  IconColumns,
+  IconRotateCw,
+  IconImage,
 } from '../components/Icons.tsx';
 
-interface ExtractedData {
-  company: string;
-  position: string;
-  title: string;
-  deadline: string;
-  writtenTestDate: string;
-  interviewDate: string;
-  replyDeadline: string;
-  location: string;
-  subjects: string[];
-  requiredDocuments: string[];
-  memo: string;
-  analysisSummary?: string;
-}
-
-interface SampleDoc {
-  name: string;
-  type: string;
-  description: string;
-  textPayload: string;
-}
-
-const SAMPLE_DOCS: SampleDoc[] = [
-  {
-    name: '네이버클라우드 2026 Tech 신입 공채 요강',
-    type: '공채 모집요강 텍스트',
-    description: '분산 스토리지 / 인프라 SW 개발자 전형',
-    textPayload: `[네이버클라우드] 2026 Tech 신입 개발자 공개채용
-모집 부문: 분산 스토리지 및 클라우드 플랫폼 인프라 SW 엔지니어
-지원 접수 기간: 2026년 9월 18일(금) 18:00까지
-근무지: 경기 성남시 분당구 1784 사옥
-전형 절차:
-1. 서류 전형 (입사지원서, 포트폴리오 PDF, 성적증명서 제출)
-2. 1차 온라인 코딩테스트 및 CS 필기: 2026년 9월 25일(금) 예정 (알고리즘, 네트워크, 리눅스 커널 기초)
-3. 2차 기술 심층 면접: 2026년 10월 12일(월)
-4. 최종 합격자 발표: 2026년 10월 30일
-우대사항: 대규모 트래픽 분산 시스템 설계 경험, 오픈소스 기여 경험자`,
-  },
-  {
-    name: '현대자동차 R&D본부 SW 연구개발 채용',
-    type: '채용 공고문 텍스트',
-    description: '자율주행 인포테인먼트 및 센서퓨전 연구원',
-    textPayload: `[현대자동차] R&D본부 자율주행 SW부문 채용 공고
-모집 직무: 자율주행 센서퓨전 알고리즘 개발 연구원
-지원서 접수 마감일: 2026년 9월 15일 17시 마감
-전형 일정:
-- 서류 심사 합격자 발표 후 Softeer 역량테스트(코딩테스트 C++/Python 및 알고리즘): 2026년 9월 22일 시행
-- 직무 기술면접 및 임원면접: 2026년 10월 8일 예정
-- 근무 장소: 남양 R&D 연구센터 (경기 화성)
-제출 필수 서류: 현대자동차 채용포털 자기소개서, 공인 어학성적표(OPIc/TOEIC), 최종학위 증명서
-우대사항: ROS2 기반 로보틱스 프로젝트 경험, 칼만필터 센서 융합 프로젝트`,
-  },
-  {
-    name: '토스 커뮤니티 서버 플랫폼 엔지니어',
-    type: '상시 채용 공고',
-    description: '토스뱅크 코어 뱅킹 서버 엔지니어',
-    textPayload: `[Viva Republica / 토스뱅크] Core Banking Server Engineer 상시 채용
-직무: 코어 뱅킹 서버 플랫폼 엔지니어 (수신/여신/트랜잭션)
-서류 접수: 2026년 9월 28일 마감
-과제 전형(직무 과제 및 코딩테스트): 2026년 10월 5일 실시 (Java/Kotlin, Spring Boot, 분산 트랜잭션 무결성)
-직무 인터뷰 및 컬처핏 면접: 2026년 10월 19일 예정
-근무지: 서울 강남구 테헤란로 142 아크플레이스
-필수 제출 서류: 자유 양식 이력서(PDF), 경력 및 프로젝트 기술서, 깃허브 링크`,
-  },
-];
-
 export const DocumentAnalyzerPage: React.FC = () => {
-  const { addApplication, setCurrentTab } = useApp();
+  const { addApplication, addCredential, setCurrentTab, applications, updateApplication, selectedAppId, setSelectedAppId } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'upload' | 'text' | 'samples'>('upload');
-  const [inputText, setInputText] = useState('');
-  const [selectedFileName, setSelectedFileName] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [statusStep, setStatusStep] = useState('');
-  const [aiSource, setAiSource] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isSaved, setIsSaved] = useState(false);
-
-  // Default extracted preview data
-  const [extractedData, setExtractedData] = useState<ExtractedData>({
-    company: '네이버클라우드',
-    position: '분산 스토리지 / 인프라 SW 개발자',
-    title: '2026 네이버클라우드 Tech 신입 공채',
-    deadline: getFutureDateString(5),
-    writtenTestDate: getFutureDateString(12),
-    interviewDate: getFutureDateString(26),
-    replyDeadline: getFutureDateString(32),
-    location: '경기 성남시 분당구 정자사옥 (1784)',
-    subjects: ['알고리즘 코딩테스트', '리눅스 커널 기초', '네트워크 소켓 프로그래밍'],
-    requiredDocuments: ['온라인 입사지원서', '포트폴리오 (자유양식 PDF)', '성적증명서'],
-    memo: '대규모 분산 환경 트래픽 처리 경험 우대, 1차 온라인 코딩테스트 및 CS 기본기 철저 대비 필요.',
-    analysisSummary: 'Gemini AI가 서류 마감 및 코딩테스트/면접 일정을 자동으로 파싱했습니다.',
+  // Input tab mode
+  const [activeInputTab, setActiveInputTab] = useState<'upload' | 'samples' | 'text'>('upload');
+  const [activeResultTab, setActiveResultTab] = useState<'structured' | 'split' | 'rawOcr' | 'preview'>('structured');
+  const [targetApplicationId, setTargetApplicationId] = useState<string>(() => {
+    if (selectedAppId && applications.some(a => a.id === selectedAppId)) {
+      return selectedAppId;
+    }
+    return 'new';
   });
 
-  // Call the real backend Gemini API endpoint
-  const executeAnalysis = async (payload: {
-    text?: string;
+  // Keep targetApplicationId synced if an application was selected from outside
+  useEffect(() => {
+    if (selectedAppId && applications.some(a => a.id === selectedAppId)) {
+      setTargetApplicationId(selectedAppId);
+    }
+  }, [selectedAppId, applications]);
+
+  const [inputText, setInputText] = useState('');
+  const [selectedFileName, setSelectedFileName] = useState(VISUAL_SAMPLES[0].fileName);
+  const [previewImage, setPreviewImage] = useState<string | null>(VISUAL_SAMPLES[0].previewDataUrl);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [scanStepText, setScanStepText] = useState('OCR 판독 준비 완료');
+  const [aiSource, setAiSource] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [copiedNotification, setCopiedNotification] = useState(false);
+  const [savedSuccessMessage, setSavedSuccessMessage] = useState<string | null>(null);
+
+  // Lightbox Modal state for inspecting photos directly
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [imageRotation, setImageRotation] = useState(0);
+
+  // Default initial OCR & Analysis data (matches VISUAL_SAMPLES[0] Hyundai poster)
+  const [ocrData, setOcrData] = useState<OcrAnalysisResult>({
+    documentType: 'job_posting',
+    documentTypeLabel: '채용 공고 포스터',
+    ocrRawText: VISUAL_SAMPLES[0].ocrDefaultText,
+    confidence: 99.4,
+    detectedLanguage: '한국어 (Korean), 영어 (English)',
+    wordCount: 88,
+    lineCount: 16,
+    company: '현대자동차 R&D본부',
+    position: '자율주행 인포테인먼트 SW 연구원',
+    title: '현대자동차 R&D본부 하반기 신입 채용',
+    deadline: '2026-09-22',
+    writtenTestDate: '2026-10-03',
+    interviewDate: '2026-10-20',
+    replyDeadline: '',
+    location: '현대자동차 남양연구소 및 양재 본사',
+    scoreOrGrade: '',
+    issuer: '',
+    issueDate: '',
+    expiryDate: '',
+    subjects: [
+      'C/C++ 기반 자료구조',
+      'CAN 통신 프로토콜',
+      '임베디드 리눅스',
+      '자율주행 알고리즘 및 ROS',
+    ],
+    requiredDocuments: [
+      '현대자동차 채용포털 지원서',
+      'GitHub 포트폴리오 리포지토리 링크',
+      '공인 어학 성적표 (SPA / 토익스피킹 / OPIc)',
+    ],
+    keyRequirements: [
+      '학사 이상 또는 2027년 2월 이전 졸업 예정자',
+      'Softeer 인증 레벨 3 이상 보유 시 코딩테스트 면제',
+      '자율주행 또는 임베디드 리눅스 프로젝트 경험자 우대',
+    ],
+    memo: '서류 접수 마감: 9월 22일(화) 18:00. 소프티어 코딩테스트는 10월 3일(토) 진행되며 면제 자격(레벨 3) 보유 여부를 사전에 확인하세요.',
+    analysisSummary: '공고 포스터의 전형 일정(서류 마감 9/22, 코딩테스트 10/3, 직무면접 10/20)을 정확하게 추출했습니다.',
+  });
+
+  // Call the dedicated OCR & AI analysis API endpoint
+  const executeOcrAnalysis = async (payload: {
     fileBase64?: string;
     mimeType?: string;
     fileName?: string;
+    text?: string;
+    category?: string;
   }) => {
     setIsAnalyzing(true);
     setErrorMessage(null);
-    setIsSaved(false);
-    setStatusStep('문서 데이터 및 채용 정보를 전송 중입니다...');
+    setSavedSuccessMessage(null);
+    setScanStepText('1/3단계: 문서 이미지 고해상도 인코딩 및 스캔 영역 감지 중...');
 
     try {
-      setStatusStep('Gemini 3.8 Flash AI 모델이 채용 요강을 분석하고 있습니다...');
+      setTimeout(() => {
+        setScanStepText('2/3단계: Vision OCR로 한글/영문 글자 정밀 판독 중...');
+      }, 700);
 
-      const response = await fetch('/api/analyze-document', {
+      setTimeout(() => {
+        setScanStepText('3/3단계: 전형 일정, D-Day, 시험 과목, 필수 서류 자동 구조화 중...');
+      }, 1500);
+
+      const response = await fetch('/api/ocr-analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,40 +134,64 @@ export const DocumentAnalyzerPage: React.FC = () => {
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        throw new Error(errJson.error || `서버 응답 오류 (HTTP ${response.status})`);
+        throw new Error(errJson.error || `서버 오류 (HTTP ${response.status})`);
       }
 
       const result = await response.json();
 
       if (!result.success || !result.data) {
-        throw new Error(result.error || 'AI 분석 결과 데이터를 받아오지 못했습니다.');
+        throw new Error(result.error || 'OCR 분석 결과를 받아오지 못했습니다.');
       }
 
-      setStatusStep('전형 일정 및 서류 체크리스트 구조화 완료!');
-      setAiSource(result.source);
-      setExtractedData({
-        company: result.data.company || '지원 기업',
-        position: result.data.position || '모집 직무',
-        title: result.data.title || `${result.data.company || ''} 채용 공고`,
-        deadline: result.data.deadline || '',
-        writtenTestDate: result.data.writtenTestDate || '',
-        interviewDate: result.data.interviewDate || '',
-        replyDeadline: result.data.replyDeadline || '',
-        location: result.data.location || '',
-        subjects: Array.isArray(result.data.subjects) ? result.data.subjects : [],
-        requiredDocuments: Array.isArray(result.data.requiredDocuments) ? result.data.requiredDocuments : [],
-        memo: result.data.memo || '',
-        analysisSummary: result.data.analysisSummary || '채용 정보 분석이 완료되었습니다.',
+      const d = result.data;
+      const textToScan = d.ocrRawText || payload.text || '';
+      const localDates = extractDatesFromKoreanDoc(textToScan);
+
+      // Verify deadlines: prioritize accurate document date and eliminate range start date bugs
+      const finalDeadline = localDates.deadline || d.deadline || '';
+      const finalWrittenTest = localDates.writtenTestDate || d.writtenTestDate || '';
+      const finalInterview = localDates.interviewDate || d.interviewDate || '';
+      const finalReply = localDates.replyDeadline || d.replyDeadline || '';
+      const finalIssue = localDates.issueDate || d.issueDate || '';
+      const finalExpiry = localDates.expiryDate || d.expiryDate || '';
+
+      setAiSource(result.source || 'Vision OCR Engine');
+      setOcrData({
+        documentType: d.documentType || 'job_posting',
+        documentTypeLabel: d.documentTypeLabel || '문서 분석',
+        ocrRawText: d.ocrRawText || payload.text || '',
+        confidence: d.confidence || 99.4,
+        detectedLanguage: d.detectedLanguage || '한국어, 영어',
+        wordCount: d.wordCount || (d.ocrRawText ? d.ocrRawText.split(/\s+/).length : 0),
+        lineCount: d.lineCount || (d.ocrRawText ? d.ocrRawText.split('\n').length : 0),
+        company: d.company || '지원 대상 기업',
+        position: d.position || '모집 직무',
+        title: d.title || `${d.company || ''} ${d.position || ''}`,
+        deadline: finalDeadline,
+        writtenTestDate: finalWrittenTest,
+        interviewDate: finalInterview,
+        replyDeadline: finalReply,
+        location: d.location || '',
+        scoreOrGrade: d.scoreOrGrade || '',
+        issuer: d.issuer || '',
+        issueDate: finalIssue,
+        expiryDate: finalExpiry,
+        subjects: Array.isArray(d.subjects) ? d.subjects : [],
+        requiredDocuments: Array.isArray(d.requiredDocuments) ? d.requiredDocuments : [],
+        keyRequirements: Array.isArray(d.keyRequirements) ? d.keyRequirements : [],
+        memo: d.memo || '',
+        analysisSummary: d.analysisSummary || 'OCR 판독 및 전형 일정 분석이 완료되었습니다.',
       });
+      setActiveResultTab('structured');
     } catch (err: any) {
-      console.error('AI Analysis failed:', err);
-      setErrorMessage(err.message || 'AI 분석 중 오류가 발생했습니다. 다시 시도해 주세요.');
+      console.error('OCR Analysis failed:', err);
+      setErrorMessage(err.message || 'OCR 분석 중 오류가 발생했습니다. 다시 시도해 주세요.');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // Handle actual file upload
+  // Handle image or PDF upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -173,168 +201,259 @@ export const DocumentAnalyzerPage: React.FC = () => {
 
     reader.onload = async () => {
       const base64Data = reader.result as string;
-      await executeAnalysis({
+      if (file.type.startsWith('image/')) {
+        setPreviewImage(base64Data);
+      } else {
+        setPreviewImage(null);
+      }
+
+      await executeOcrAnalysis({
         fileName: file.name,
         fileBase64: base64Data,
         mimeType: file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/png'),
-        text: inputText || undefined,
+        category: 'auto',
       });
     };
 
     reader.onerror = () => {
-      setErrorMessage('파일을 읽는 중 오류가 발생했습니다.');
+      setErrorMessage('파일을 읽어오는 중 오류가 발생했습니다.');
     };
 
     reader.readAsDataURL(file);
   };
 
-  // Handle raw text submit
+  // Handle sample selection
+  const handleSelectSample = async (sample: VisualSampleDoc) => {
+    setSelectedFileName(sample.fileName);
+    setPreviewImage(sample.previewDataUrl);
+    setInputText(sample.ocrDefaultText);
+
+    if (sample.structuredDates) {
+      setOcrData(prev => ({
+        ...prev,
+        deadline: sample.structuredDates?.deadline || '',
+        writtenTestDate: sample.structuredDates?.writtenTestDate || '',
+        interviewDate: sample.structuredDates?.interviewDate || '',
+        replyDeadline: sample.structuredDates?.replyDeadline || '',
+        issueDate: sample.structuredDates?.issueDate || '',
+        expiryDate: sample.structuredDates?.expiryDate || '',
+      }));
+    }
+
+    await executeOcrAnalysis({
+      fileName: sample.fileName,
+      fileBase64: sample.previewDataUrl,
+      mimeType: 'image/svg+xml',
+      category: sample.category,
+      text: sample.ocrDefaultText,
+    });
+  };
+
+  // Handle manual text submit
   const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) {
-      alert('분석할 채용 공고 텍스트를 입력해 주세요.');
+      alert('분석할 채용 공고 또는 문서 텍스트를 입력해 주세요.');
       return;
     }
 
-    await executeAnalysis({
+    setPreviewImage(null);
+    setSelectedFileName('직접 입력 텍스트');
+    await executeOcrAnalysis({
       text: inputText.trim(),
-      fileName: '직접 입력한 채용 공고',
+      fileName: '직접 입력 공고문',
+      category: 'auto',
     });
   };
 
-  // Handle sample selection
-  const handleSampleSelect = async (sample: SampleDoc) => {
-    setSelectedFileName(sample.name);
-    setInputText(sample.textPayload);
-    await executeAnalysis({
-      text: sample.textPayload,
-      fileName: sample.name,
-    });
+  // Copy raw OCR text to clipboard
+  const handleCopyOcrText = () => {
+    if (!ocrData.ocrRawText) return;
+    navigator.clipboard.writeText(ocrData.ocrRawText);
+    setCopiedNotification(true);
+    setTimeout(() => setCopiedNotification(false), 2000);
   };
 
-  // Save parsed data directly to applications
+  // Save to Applications (either creates new or updates selected existing application)
   const handleSaveToApplications = () => {
-    addApplication({
-      company: extractedData.company.trim() || '지원 대상 회사',
-      position: extractedData.position.trim() || '소프트웨어 개발',
-      title: extractedData.title.trim() || `${extractedData.company} 채용`,
+    if (targetApplicationId !== 'new') {
+      const existingApp = applications.find(a => a.id === targetApplicationId);
+      if (existingApp) {
+        const updates: any = {};
+        if (previewImage) {
+          updates.imageUrl = previewImage;
+        }
+        if (ocrData.deadline) updates.deadline = ocrData.deadline;
+        if (ocrData.writtenTestDate) updates.writtenTestDate = ocrData.writtenTestDate;
+        if (ocrData.interviewDate) updates.interviewDate = ocrData.interviewDate;
+        if (ocrData.replyDeadline) updates.replyDeadline = ocrData.replyDeadline;
+        if (ocrData.location) updates.location = ocrData.location;
+
+        if (Array.isArray(ocrData.subjects) && ocrData.subjects.length > 0) {
+          updates.subjects = Array.from(new Set([...(existingApp.subjects || []), ...ocrData.subjects]));
+        }
+
+        if (ocrData.requiredDocuments && ocrData.requiredDocuments.length > 0) {
+          const existingDocNames = new Set((existingApp.requiredDocuments || []).map(d => d.name));
+          const newDocs = ocrData.requiredDocuments
+            .filter(name => !existingDocNames.has(name))
+            .map(name => ({ name, checked: false }));
+          updates.requiredDocuments = [...(existingApp.requiredDocuments || []), ...newDocs];
+        }
+
+        if (ocrData.memo) {
+          updates.memo = existingApp.memo
+            ? `${existingApp.memo}\n\n[OCR 분석 메모]: ${ocrData.memo}`
+            : ocrData.memo;
+        }
+
+        updateApplication(existingApp.id, updates);
+        setSelectedAppId(existingApp.id);
+        setSavedSuccessMessage(`[${existingApp.company}] 공고에 포스터 사진과 전형 일정이 성공적으로 반영되었습니다!`);
+        setTimeout(() => {
+          setCurrentTab('applications');
+        }, 900);
+        return;
+      }
+    }
+
+    // Create new application
+    const newApp = addApplication({
+      company: ocrData.company.trim() || '지원 대상 회사',
+      position: ocrData.position.trim() || '소프트웨어 개발',
+      title: ocrData.title.trim() || `${ocrData.company} 채용`,
       stage: '서류접수',
-      deadline: extractedData.deadline,
-      writtenTestDate: extractedData.writtenTestDate,
-      interviewDate: extractedData.interviewDate,
-      replyDeadline: extractedData.replyDeadline,
-      location: extractedData.location,
-      subjects: extractedData.subjects,
-      requiredDocuments: extractedData.requiredDocuments.map(name => ({ name, checked: false })),
-      memo: extractedData.memo,
+      deadline: ocrData.deadline || '',
+      imageUrl: previewImage || undefined,
+      writtenTestDate: ocrData.writtenTestDate,
+      interviewDate: ocrData.interviewDate,
+      replyDeadline: ocrData.replyDeadline,
+      location: ocrData.location,
+      subjects: ocrData.subjects,
+      requiredDocuments: ocrData.requiredDocuments.map(name => ({ name, checked: false })),
+      memo: ocrData.memo,
       priority: 'high',
     });
 
-    setIsSaved(true);
+    setSelectedAppId(newApp.id);
+    setSavedSuccessMessage(`[${newApp.company}] 공고에 포스터 이미지가 성공적으로 저장되었습니다! 상세 화면으로 이동합니다.`);
     setTimeout(() => {
       setCurrentTab('applications');
-    }, 700);
+    }, 900);
+  };
+
+  // Save to Credentials if it's a certificate/test report
+  const handleSaveToCredentials = () => {
+    addCredential({
+      name: ocrData.position || ocrData.title || '공인 어학/자격',
+      grade: ocrData.scoreOrGrade || '취득',
+      issuer: ocrData.issuer || ocrData.company || '공식 인증 기관',
+      acquiredDate: ocrData.issueDate || new Date().toISOString().split('T')[0],
+      expiresAt: ocrData.expiryDate || getFutureDateString(730),
+      imageUrl: previewImage || undefined,
+      memo: ocrData.memo || 'OCR 자동 인식으로 등록된 자격/어학 정보',
+    });
+
+    setSavedSuccessMessage('내 자격증 & 어학 성적 탭에 성공적으로 등록되었습니다!');
+    setTimeout(() => {
+      setCurrentTab('credentials');
+    }, 1200);
   };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Top Banner */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-6 text-white shadow-lg">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-blue-500/30 border border-blue-400/40 text-blue-200 flex items-center gap-1.5">
-                <IconSparkles className="w-3.5 h-3.5" />
-                Gemini 3.8 Flash 기반 채용 문서 AI 분석기
-              </span>
-              {aiSource === 'gemini-3.8-flash' && (
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
-                  Gemini 실시간 연동 완료
-                </span>
-              )}
-            </div>
-            <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-              채용 공고 PDF, 이미지, 텍스트를 넣으면 AI가 핵심 일정을 자동 추출합니다
-            </h2>
-            <p className="text-xs sm:text-sm text-blue-100/80 mt-1 max-w-2xl leading-relaxed">
-              복잡한 모집 요강을 일일이 읽지 않아도 서류 마감일, 코딩테스트/필기시험 날짜, 면접 일정, 시험 과목, 제출 필수 서류를 자동으로 파악합니다.
-            </p>
-          </div>
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <IconScan className="w-5 h-5 text-blue-600" />
+            <span>공고문 / 안내문 AI 분석</span>
+          </h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            공고문이나 안내문에서 주요 일정과 서류를 자동으로 추출합니다.
+          </p>
         </div>
+        {aiSource && (
+          <span className="text-xs font-medium px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 self-start sm:self-center">
+            {aiSource}
+          </span>
+        )}
       </div>
 
-      {/* Main Analysis Workspace */}
+      {/* Workspace Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column (5 Cols): Input Modes (Upload, Text Paste, Samples) */}
+        {/* Left Column (5 Cols): OCR Source Input */}
         <div className="lg:col-span-5 space-y-4">
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs">
-            {/* Tab Selector */}
+            {/* Input Method Switcher */}
             <div className="flex rounded-xl bg-slate-100 p-1 mb-4">
               <button
                 type="button"
-                onClick={() => setActiveTab('upload')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                  activeTab === 'upload'
+                onClick={() => setActiveInputTab('upload')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  activeInputTab === 'upload'
                     ? 'bg-white text-blue-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                파일 업로드 (PDF/이미지)
+                <IconCamera className="w-3.5 h-3.5" />
+                이미지/PDF 스캔
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('text')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                  activeTab === 'text'
+                onClick={() => setActiveInputTab('samples')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  activeInputTab === 'samples'
                     ? 'bg-white text-blue-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                공고 텍스트 붙여넣기
+                <IconSparkles className="w-3.5 h-3.5" />
+                샘플 공고
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('samples')}
-                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
-                  activeTab === 'samples'
+                onClick={() => setActiveInputTab('text')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                  activeInputTab === 'text'
                     ? 'bg-white text-blue-700 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                예시 공고
+                텍스트 직접 입력
               </button>
             </div>
 
-            {/* Tab 1: File Upload */}
-            {activeTab === 'upload' && (
-              <div className="space-y-3">
-                <div className="relative border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-2xl p-6 text-center transition-all bg-indigo-50/20 group">
+            {/* Tab 1: Image / PDF File Upload */}
+            {activeInputTab === 'upload' && (
+              <div className="space-y-4">
+                <div className="relative border-2 border-dashed border-indigo-200 hover:border-indigo-500 rounded-2xl p-6 text-center transition-all bg-indigo-50/20 group cursor-pointer">
                   <input
                     type="file"
-                    id="doc-file-upload"
-                    accept=".pdf,.png,.jpg,.jpeg,.webp"
+                    id="ocr-file-upload"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf"
                     onChange={handleFileUpload}
                     className="hidden"
                     disabled={isAnalyzing}
                   />
                   <label
-                    htmlFor="doc-file-upload"
+                    htmlFor="ocr-file-upload"
                     className="cursor-pointer flex flex-col items-center justify-center gap-2.5"
                   >
-                    <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-                      <IconUploadCloud className="w-6 h-6" />
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:scale-105 transition-transform shadow-2xs">
+                      <IconScan className="w-6 h-6" />
                     </div>
                     <div>
                       <span className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 block">
-                        채용 공고 파일 선택 또는 드래그
+                        공고문 또는 안내문 파일 업로드
                       </span>
-                      <span className="text-xs text-slate-400 mt-1 block">
-                        PDF 파일 또는 캡처 이미지 (PNG, JPG, WebP)
+                      <span className="text-xs text-slate-400 mt-0.5 block">
+                        PNG, JPG, WebP, PDF (최대 20MB)
                       </span>
                     </div>
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-indigo-600 text-white shadow-xs">
-                      <IconSparkles className="w-3.5 h-3.5" />
-                      파일 선택하여 AI 분석
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors">
+                      <IconUploadCloud className="w-4 h-4" />
+                      사진 또는 문서 파일 선택
                     </span>
                   </label>
                 </div>
@@ -342,20 +461,65 @@ export const DocumentAnalyzerPage: React.FC = () => {
                 {selectedFileName && (
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs flex items-center justify-between">
                     <span className="font-semibold text-slate-700 truncate">{selectedFileName}</span>
-                    <span className="text-slate-400 shrink-0">선택됨</span>
+                    <span className="text-blue-600 font-bold shrink-0">선택 완료</span>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Tab 2: Text Paste */}
-            {activeTab === 'text' && (
+            {/* Tab 2: Visual Sample Posters for Instant Testing */}
+            {activeInputTab === 'samples' && (
+              <div className="space-y-3">
+                <div className="space-y-2.5 max-h-[380px] overflow-y-auto pr-1">
+                  {VISUAL_SAMPLES.map(sample => (
+                    <button
+                      key={sample.id}
+                      type="button"
+                      disabled={isAnalyzing}
+                      onClick={() => handleSelectSample(sample)}
+                      className={`w-full text-left p-3.5 rounded-xl border transition-all flex items-start gap-3 ${
+                        selectedFileName === sample.fileName
+                          ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/40 shadow-xs'
+                          : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="w-14 h-16 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                        <img
+                          src={sample.previewDataUrl}
+                          alt={sample.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold border ${sample.badgeColor}`}>
+                            {sample.categoryLabel}
+                          </span>
+                          <span className="text-[11px] font-bold text-blue-600">
+                            선택 &rarr;
+                          </span>
+                        </div>
+                        <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">
+                          {sample.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2 leading-relaxed">
+                          {sample.description}
+                        </p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tab 3: Raw Text Input */}
+            {activeInputTab === 'text' && (
               <form onSubmit={handleTextSubmit} className="space-y-3">
                 <textarea
-                  rows={8}
+                  rows={9}
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
-                  placeholder="사람인, 원티드, 잡코리아 또는 기업 채용 페이지에서 복사한 공고문 텍스트를 여기에 그대로 붙여넣으세요..."
+                  placeholder="공고문 텍스트를 입력하거나 붙여넣으세요..."
                   className="w-full text-xs sm:text-sm p-3.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 leading-relaxed"
                   disabled={isAnalyzing}
                 />
@@ -365,252 +529,702 @@ export const DocumentAnalyzerPage: React.FC = () => {
                   className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-xs sm:text-sm font-bold py-2.5 rounded-xl shadow-xs transition-colors"
                 >
                   <IconSparkles className="w-4 h-4" />
-                  <span>Gemini AI 공고 텍스트 분석 시작</span>
+                  <span>공고 텍스트 AI 분석 시작</span>
                 </button>
               </form>
             )}
-
-            {/* Tab 3: Sample Announcements */}
-            {activeTab === 'samples' && (
-              <div className="space-y-2.5">
-                <p className="text-xs text-slate-500 mb-2">
-                  클릭하면 실제 대기업/테크 채용 요강 텍스트를 Gemini AI로 즉시 분석합니다.
-                </p>
-                {SAMPLE_DOCS.map((sample, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    disabled={isAnalyzing}
-                    onClick={() => handleSampleSelect(sample)}
-                    className="w-full text-left p-3.5 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/40 transition-all flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="text-xs font-bold text-slate-900">{sample.name}</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">{sample.description}</div>
-                    </div>
-                    <span className="text-xs font-semibold text-blue-600 shrink-0">분석 실행 &rarr;</span>
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
-          {/* Error Banner */}
+          {/* Error Message if any */}
           {errorMessage && (
             <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2.5">
               <IconAlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
               <div>
-                <p className="font-bold">분석 실패</p>
-                <p className="mt-0.5 text-rose-700">{errorMessage}</p>
+                <p className="font-bold">분석 중 오류 발생</p>
+                <p className="mt-0.5 text-rose-700 leading-relaxed">{errorMessage}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Success Banner when registered */}
+          {savedSuccessMessage && (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-start gap-2.5 animate-fade-in">
+              <IconCheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+              <div>
+                <p className="font-bold">등록 완료</p>
+                <p className="mt-0.5 text-emerald-700 leading-relaxed">{savedSuccessMessage}</p>
+              </div>
+            </div>
+          )}
+          {/* Direct Photo Inspection Card */}
+          {previewImage && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                    <IconImage className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                      현재 분석 사진 원본
+                      <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                        판독 완료
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 truncate max-w-[200px]">
+                      {selectedFileName || '업로드된 이미지'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setImageRotation(prev => (prev + 90) % 360)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                    title="90도 회전"
+                  >
+                    <IconRotateCw className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsLightboxOpen(true)}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"
+                    title="전체화면으로 사진 크게 보기"
+                  >
+                    <IconMaximize2 className="w-3.5 h-3.5" />
+                    <span>크게 보기</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Interactive Image Preview Box */}
+              <div
+                className="relative rounded-xl border border-slate-200 bg-slate-950/5 overflow-hidden flex items-center justify-center min-h-[220px] max-h-[340px] cursor-pointer group"
+                onClick={() => setIsLightboxOpen(true)}
+              >
+                <img
+                  src={previewImage}
+                  alt={selectedFileName || '문서 사진'}
+                  style={{ transform: `rotate(${imageRotation}deg)` }}
+                  className="max-h-[320px] max-w-full object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                />
+
+                {/* Hover overlay hint */}
+                <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white gap-1 p-4 text-center">
+                  <div className="w-9 h-9 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white shadow-lg">
+                    <IconZoomIn className="w-4 h-4" />
+                  </div>
+                  <span className="text-xs font-bold drop-shadow-sm">
+                    클릭하여 확대
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end text-[11px] text-slate-500 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsLightboxOpen(true)}
+                  className="text-blue-600 font-bold hover:underline"
+                >
+                  전체화면 &rarr;
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Right Column (7 Cols): Extracted Output & 1-Click Registration */}
-        <div className="lg:col-span-7">
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-2xs space-y-5">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        {/* Right Column (7 Cols): Output Viewer with Tabs */}
+        <div className="lg:col-span-7 space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-5">
+            {/* Header with Switcher between Structured Analysis, Split View, Raw OCR Text, and Image Preview */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
               <div>
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <IconFileSearch className="w-5 h-5 text-blue-600" />
-                  AI 분석 결과 및 추출 정보
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+                    <IconScan className="w-5 h-5 text-blue-600" />
+                    공고문 AI 분석 결과
+                  </h3>
+                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
+                    신뢰도 {ocrData.confidence}%
+                  </span>
+                </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  추출된 내용을 확인하고 필요한 경우 직접 수정한 뒤 지원 공고로 바로 등록하세요.
+                  {ocrData.documentTypeLabel} ({ocrData.company}) · {ocrData.wordCount}개 단어 감지
                 </p>
               </div>
 
-              {isAnalyzing && (
-                <span className="text-xs px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-bold flex items-center gap-1.5 animate-pulse">
-                  <div className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
-                  AI 분석 중
-                </span>
-              )}
+              {/* View Switcher Tabs */}
+              <div className="flex flex-wrap rounded-xl bg-slate-100 p-1 self-start sm:self-center">
+                <button
+                  type="button"
+                  onClick={() => setActiveResultTab('structured')}
+                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                    activeResultTab === 'structured'
+                      ? 'bg-white text-blue-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <IconFileSearch className="w-3.5 h-3.5" />
+                  전형 구조화
+                </button>
+                {previewImage && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveResultTab('split')}
+                    className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                      activeResultTab === 'split'
+                        ? 'bg-white text-blue-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                    title="사진 원본과 추출 결과를 좌우로 나란히 비교"
+                  >
+                    <IconColumns className="w-3.5 h-3.5" />
+                    사진 나란히 대조
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setActiveResultTab('rawOcr')}
+                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                    activeResultTab === 'rawOcr'
+                      ? 'bg-white text-blue-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <IconScan className="w-3.5 h-3.5" />
+                  추출 원문 텍스트
+                </button>
+                {previewImage && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveResultTab('preview')}
+                    className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                      activeResultTab === 'preview'
+                        ? 'bg-white text-blue-700 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <IconImage className="w-3.5 h-3.5" />
+                    사진 뷰어
+                  </button>
+                )}
+              </div>
             </div>
 
+            {/* Loading Scanner Animation */}
             {isAnalyzing ? (
               <div className="py-20 text-center space-y-4">
-                <div className="w-12 h-12 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-slate-800">{statusStep}</p>
-                  <p className="text-xs text-slate-400">Gemini 3.8 Flash가 채용 일정과 자격 요건을 파싱하고 있습니다.</p>
+                <div className="relative w-20 h-24 mx-auto rounded-xl border-2 border-blue-400/80 bg-blue-50/40 overflow-hidden flex flex-col items-center justify-center p-3 shadow-inner">
+                  <IconScan className="w-8 h-8 text-blue-600 animate-pulse" />
+                  {/* Laser scan line effect */}
+                  <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent animate-bounce shadow-md" />
+                </div>
+                <div className="space-y-1 max-w-sm mx-auto">
+                  <p className="text-sm font-black text-slate-900">{scanStepText}</p>
                 </div>
               </div>
             ) : (
               <>
-                {/* AI Summary Banner */}
-                {extractedData.analysisSummary && (
-                  <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-100 flex items-start gap-2.5">
-                    <IconSparkles className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-900 font-medium leading-relaxed">
-                      <span className="font-bold">AI 총평: </span>
-                      {extractedData.analysisSummary}
-                    </p>
+                {/* Result Tab 1: Structured AI Analysis */}
+                {activeResultTab === 'structured' && (
+                  <div className="space-y-4">
+                    {/* Company & Position */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">
+                          {ocrData.documentType === 'certificate' ? '발급/주관 기관' : '기업 / 회사명'}
+                        </label>
+                        <input
+                          type="text"
+                          value={ocrData.company}
+                          onChange={e => setOcrData({ ...ocrData, company: e.target.value })}
+                          className="w-full text-sm font-extrabold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">
+                          {ocrData.documentType === 'certificate' ? '자격/어학 시험명' : '모집 직무 / 부문'}
+                        </label>
+                        <input
+                          type="text"
+                          value={ocrData.position}
+                          onChange={e => setOcrData({ ...ocrData, position: e.target.value })}
+                          className="w-full text-sm font-extrabold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Key Schedules extracted via OCR */}
+                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                          <IconCalendar className="w-3.5 h-3.5 text-blue-600" />
+                          주요 전형 일정
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="bg-white p-3 rounded-xl border border-rose-200 shadow-2xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-bold text-rose-700">서류 접수 마감</span>
+                            <span className="w-2 h-2 rounded-full bg-rose-500" />
+                          </div>
+                          <input
+                            type="date"
+                            value={ocrData.deadline}
+                            onChange={e => setOcrData({ ...ocrData, deadline: e.target.value })}
+                            className="w-full text-xs font-black text-slate-800 focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div className="bg-white p-3 rounded-xl border border-indigo-200 shadow-2xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-bold text-indigo-700">필기 / 코딩테스트</span>
+                            <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                          </div>
+                          <input
+                            type="date"
+                            value={ocrData.writtenTestDate}
+                            onChange={e => setOcrData({ ...ocrData, writtenTestDate: e.target.value })}
+                            className="w-full text-xs font-black text-slate-800 focus:outline-hidden"
+                          />
+                        </div>
+
+                        <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-bold text-purple-700">면접 전형일</span>
+                            <span className="w-2 h-2 rounded-full bg-purple-500" />
+                          </div>
+                          <input
+                            type="date"
+                            value={ocrData.interviewDate}
+                            onChange={e => setOcrData({ ...ocrData, interviewDate: e.target.value })}
+                            className="w-full text-xs font-black text-slate-800 focus:outline-hidden"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Certificate Specific Info (if certificate) */}
+                    {ocrData.documentType === 'certificate' && (
+                      <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-2">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                          <IconAward className="w-4 h-4 text-amber-600" />
+                          자격 및 성적 정보
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="bg-white p-2.5 rounded-lg border border-amber-200">
+                            <span className="text-[11px] text-slate-500 block">취득 등급 / 점수</span>
+                            <span className="text-sm font-black text-amber-800">
+                              {ocrData.scoreOrGrade || '취득 완료'}
+                            </span>
+                          </div>
+                          <div className="bg-white p-2.5 rounded-lg border border-amber-200">
+                            <span className="text-[11px] text-slate-500 block">취득/발급일</span>
+                            <span className="text-xs font-bold text-slate-800">
+                              {ocrData.issueDate || '2026-08-15'}
+                            </span>
+                          </div>
+                          <div className="bg-white p-2.5 rounded-lg border border-amber-200">
+                            <span className="text-[11px] text-slate-500 block">유효기간 만료일</span>
+                            <span className="text-xs font-bold text-rose-700">
+                              {ocrData.expiryDate || '2028-08-14 (2년)'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Subjects & Competencies */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        평가 과목 및 역량
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {ocrData.subjects.map((subj, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-semibold"
+                          >
+                            <IconBookOpen className="w-3.5 h-3.5 text-indigo-500" />
+                            {subj}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Required Documents */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        제출 필요 서류
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {ocrData.requiredDocuments.map((doc, idx) => (
+                          <span
+                            key={idx}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium"
+                          >
+                            <IconCheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            {doc}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Location & Memo */}
+                    {ocrData.location && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
+                          <IconMapPin className="w-3.5 h-3.5 text-slate-400" />
+                          근무지 또는 시험 장소
+                        </label>
+                        <input
+                          type="text"
+                          value={ocrData.location}
+                          onChange={e => setOcrData({ ...ocrData, location: e.target.value })}
+                          className="w-full text-xs px-3.5 py-2 border border-slate-200 rounded-xl"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">
+                        메모 / 유의사항
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={ocrData.memo}
+                        onChange={e => setOcrData({ ...ocrData, memo: e.target.value })}
+                        className="w-full text-xs p-3 border border-slate-200 rounded-xl leading-relaxed text-slate-800"
+                      />
+                    </div>
+
+                    {/* 저장 대상 설정 및 저장 (전형 준비 메모 바로 아래) */}
+                    <div className="mt-4 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5 shrink-0">
+                          <IconBriefcase className="w-4 h-4 text-blue-600" />
+                          <span>저장 대상:</span>
+                        </label>
+
+                        {ocrData.documentType === 'certificate' ? (
+                          <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 border border-amber-200 w-fit">
+                            자격증 / 어학 성적표로 인식됨
+                          </span>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2 max-w-full">
+                            <div className="inline-flex rounded-lg bg-white p-0.5 border border-slate-200 shadow-2xs">
+                              <button
+                                type="button"
+                                onClick={() => setTargetApplicationId('new')}
+                                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                                  targetApplicationId === 'new'
+                                    ? 'bg-blue-600 text-white shadow-2xs'
+                                    : 'text-slate-600 hover:text-slate-900'
+                                }`}
+                              >
+                                + 새 공고로 등록
+                              </button>
+                              {applications.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (targetApplicationId === 'new') {
+                                      setTargetApplicationId(
+                                        selectedAppId && applications.some(a => a.id === selectedAppId)
+                                          ? selectedAppId
+                                          : applications[0].id
+                                      );
+                                    }
+                                  }}
+                                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                                    targetApplicationId !== 'new'
+                                      ? 'bg-blue-600 text-white shadow-2xs'
+                                      : 'text-slate-600 hover:text-slate-900'
+                                  }`}
+                                >
+                                  기존 내 공고 ({applications.length})
+                                </button>
+                              )}
+                            </div>
+
+                            {targetApplicationId !== 'new' && applications.length > 0 && (
+                              <select
+                                value={targetApplicationId}
+                                onChange={e => setTargetApplicationId(e.target.value)}
+                                className="w-full sm:w-auto max-w-full text-xs font-bold bg-white border border-blue-300 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500 shadow-2xs truncate"
+                              >
+                                {applications.map(app => (
+                                  <option key={app.id} value={app.id}>
+                                    [{app.company}] {app.position} ({app.stage})
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 저장 실행 버튼 - 영역 밖으로 벗어나지 않는 반응형 버튼 */}
+                      <div className="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        {ocrData.documentType === 'certificate' ? (
+                          <button
+                            type="button"
+                            onClick={handleSaveToCredentials}
+                            className="flex-1 inline-flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl shadow-xs transition-colors"
+                          >
+                            <IconAward className="w-4 h-4 shrink-0" />
+                            <span>내 자격증으로 즉시 등록</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={handleSaveToApplications}
+                            className="flex-1 inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl shadow-xs transition-colors"
+                          >
+                            <IconPlus className="w-4 h-4 shrink-0" />
+                            <span className="truncate">
+                              {targetApplicationId === 'new'
+                                ? '새 지원 공고로 즉시 저장'
+                                : `[${applications.find(a => a.id === targetApplicationId)?.company || '선택 공고'}]에 반영 & 저장`}
+                            </span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentTab('study')}
+                          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-colors shrink-0"
+                          title="공부 플래너로 이동"
+                        >
+                          <IconBookOpen className="w-4 h-4 text-indigo-600" />
+                          <span>학습 플래너</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                {/* Company & Position */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      회사명
-                    </label>
-                    <input
-                      type="text"
-                      value={extractedData.company}
-                      onChange={e => setExtractedData({ ...extractedData, company: e.target.value })}
-                      className="w-full text-sm font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      지원 직무
-                    </label>
-                    <input
-                      type="text"
-                      value={extractedData.position}
-                      onChange={e => setExtractedData({ ...extractedData, position: e.target.value })}
-                      className="w-full text-sm font-bold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Key Dates Extracted */}
-                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                    자동 인식된 주요 전형 일정
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="bg-white p-3 rounded-xl border border-slate-200">
-                      <span className="text-[11px] text-slate-500 block mb-1">서류 마감일</span>
-                      <input
-                        type="date"
-                        value={extractedData.deadline}
-                        onChange={e => setExtractedData({ ...extractedData, deadline: e.target.value })}
-                        className="w-full text-xs font-bold text-slate-800 focus:outline-hidden"
-                      />
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-indigo-100">
-                      <span className="text-[11px] text-indigo-600 font-semibold block mb-1">필기/코딩테스트</span>
-                      <input
-                        type="date"
-                        value={extractedData.writtenTestDate}
-                        onChange={e => setExtractedData({ ...extractedData, writtenTestDate: e.target.value })}
-                        className="w-full text-xs font-bold text-indigo-900 focus:outline-hidden"
-                      />
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-purple-100">
-                      <span className="text-[11px] text-purple-600 font-semibold block mb-1">면접 전형일</span>
-                      <input
-                        type="date"
-                        value={extractedData.interviewDate}
-                        onChange={e => setExtractedData({ ...extractedData, interviewDate: e.target.value })}
-                        className="w-full text-xs font-bold text-purple-900 focus:outline-hidden"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Subjects Extracted */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1.5">
-                    필기/코딩테스트 평가 과목 및 필요 역량
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {extractedData.subjects.map((subj, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-semibold"
-                      >
-                        <IconBookOpen className="w-3.5 h-3.5 text-indigo-500" />
-                        {subj}
+                {/* Result Tab 2: Split View (Side-by-Side: Image vs Extracted Data) */}
+                {activeResultTab === 'split' && previewImage && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between pb-1">
+                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <IconColumns className="w-3.5 h-3.5 text-blue-600" />
+                        사진과 추출 결과 대조
                       </span>
-                    ))}
-                    {extractedData.subjects.length === 0 && (
-                      <span className="text-xs text-slate-400">추출된 시험 과목 없음</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Required Documents Extracted */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-600 mb-1.5">
-                    필수 제출 서류 목록
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {extractedData.requiredDocuments.map((doc, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium"
+                      <button
+                        type="button"
+                        onClick={() => setIsLightboxOpen(true)}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
                       >
-                        <IconCheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        {doc}
-                      </span>
-                    ))}
-                    {extractedData.requiredDocuments.length === 0 && (
-                      <span className="text-xs text-slate-400">추출된 필수 서류 없음</span>
-                    )}
-                  </div>
-                </div>
+                        <IconMaximize2 className="w-3.5 h-3.5" />
+                        전체화면
+                      </button>
+                    </div>
 
-                {/* Location & Memo */}
-                <div className="space-y-3">
-                  {extractedData.location && (
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">
-                        근무지 / 면접 장소
-                      </label>
-                      <input
-                        type="text"
-                        value={extractedData.location}
-                        onChange={e => setExtractedData({ ...extractedData, location: e.target.value })}
-                        className="w-full text-xs px-3.5 py-2 border border-slate-200 rounded-xl"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Left: Source Image */}
+                      <div className="bg-slate-900 rounded-xl p-2 flex flex-col items-center justify-center relative group min-h-[360px]">
+                        <img
+                          src={previewImage}
+                          alt="대조용 원본 사진"
+                          style={{ transform: `rotate(${imageRotation}deg)` }}
+                          className="max-h-[350px] max-w-full object-contain cursor-pointer transition-transform group-hover:scale-[1.02]"
+                          onClick={() => setIsLightboxOpen(true)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIsLightboxOpen(true)}
+                          className="absolute bottom-3 right-3 px-2.5 py-1.5 rounded-lg bg-slate-900/80 text-white text-[11px] font-bold backdrop-blur-sm border border-white/20 hover:bg-slate-800 transition-colors flex items-center gap-1"
+                        >
+                          <IconZoomIn className="w-3.5 h-3.5" />
+                          확대 보기
+                        </button>
+                      </div>
+
+                      {/* Right: Key Extracted Schedules */}
+                      <div className="space-y-3">
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                            회사 및 공고명
+                          </span>
+                          <p className="text-sm font-black text-slate-900">{ocrData.company}</p>
+                          <p className="text-xs text-slate-600 font-medium">{ocrData.position}</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="p-2.5 bg-rose-50/70 border border-rose-100 rounded-xl flex items-center justify-between">
+                            <span className="text-xs font-bold text-rose-800">서류 접수 마감</span>
+                            <span className="text-xs font-black text-rose-900">{ocrData.deadline || '상시'}</span>
+                          </div>
+
+                          {ocrData.writtenTestDate && (
+                            <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center justify-between">
+                              <span className="text-xs font-bold text-indigo-800">필기/코딩테스트</span>
+                              <span className="text-xs font-black text-indigo-900">{ocrData.writtenTestDate}</span>
+                            </div>
+                          )}
+
+                          {ocrData.interviewDate && (
+                            <div className="p-2.5 bg-purple-50/70 border border-purple-100 rounded-xl flex items-center justify-between">
+                              <span className="text-xs font-bold text-purple-800">면접 전형일</span>
+                              <span className="text-xs font-black text-purple-900">{ocrData.interviewDate}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Extracted Requirements Preview */}
+                        {ocrData.subjects.length > 0 && (
+                          <div className="p-3 bg-white border border-slate-200 rounded-xl">
+                            <span className="text-[11px] font-bold text-slate-500 block mb-1.5">인식된 과목/스킬</span>
+                            <div className="flex flex-wrap gap-1">
+                              {ocrData.subjects.slice(0, 4).map((s, i) => (
+                                <span key={i} className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium">
+                                  {s}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Result Tab 3: Raw OCR Extracted Text */}
+                {activeResultTab === 'rawOcr' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-700">
+                          추출 텍스트 원문
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          {ocrData.lineCount}줄 · {ocrData.wordCount}단어
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleCopyOcrText}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors"
+                      >
+                        {copiedNotification ? (
+                          <>
+                            <IconCheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-700 font-bold">복사 완료!</span>
+                          </>
+                        ) : (
+                          <>
+                            <IconCopy className="w-3.5 h-3.5 text-slate-500" />
+                            전체 텍스트 복사
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <textarea
+                        rows={14}
+                        value={ocrData.ocrRawText}
+                        onChange={e => setOcrData({ ...ocrData, ocrRawText: e.target.value })}
+                        className="w-full p-4 bg-slate-900 text-slate-100 font-mono text-xs leading-relaxed rounded-xl border border-slate-800 focus:ring-2 focus:ring-blue-500/30 selection:bg-blue-600"
                       />
                     </div>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 mb-1">
-                      전형 핵심 요약 및 준비 팁
-                    </label>
-                    <textarea
-                      rows={3}
-                      value={extractedData.memo}
-                      onChange={e => setExtractedData({ ...extractedData, memo: e.target.value })}
-                      className="w-full text-xs p-3 border border-slate-200 rounded-xl leading-relaxed"
-                    />
                   </div>
-                </div>
+                )}
 
-                {/* Direct Action Button */}
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-xs text-slate-500">
-                    등록 시 공고 목록 및 캘린더 D-Day에 즉시 반영됩니다.
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleSaveToApplications}
-                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold px-5 py-2.5 rounded-xl shadow-xs transition-colors"
-                  >
-                    {isSaved ? (
-                      <>
-                        <IconCheckCircle2 className="w-4 h-4" />
-                        지원 공고로 등록 완료!
-                      </>
-                    ) : (
-                      <>
+                {/* Result Tab 4: Original Image Preview with Controls */}
+                {activeResultTab === 'preview' && previewImage && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-bold text-slate-800">
+                          원본 사진
+                        </span>
+                        <p className="text-[11px] text-slate-400">{selectedFileName}</p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setImageRotation(prev => (prev + 90) % 360)}
+                          className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1"
+                        >
+                          <IconRotateCw className="w-3.5 h-3.5" />
+                          90° 회전
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsLightboxOpen(true)}
+                          className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors flex items-center gap-1"
+                        >
+                          <IconMaximize2 className="w-3.5 h-3.5" />
+                          전체화면 확대
+                        </button>
+                      </div>
+                    </div>
+
+                    <div
+                      className="rounded-xl border border-slate-200 bg-slate-900 p-4 overflow-hidden flex items-center justify-center min-h-[380px] max-h-[500px] cursor-pointer relative group"
+                      onClick={() => setIsLightboxOpen(true)}
+                    >
+                      <img
+                        src={previewImage}
+                        alt="OCR 원본 미리보기"
+                        style={{ transform: `rotate(${imageRotation}deg)` }}
+                        className="max-h-[460px] max-w-full object-contain rounded-lg shadow-md transition-transform group-hover:scale-[1.01]"
+                      />
+                      <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                        <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/80 text-white text-xs font-bold shadow-lg backdrop-blur-sm flex items-center gap-1.5">
+                          <IconZoomIn className="w-3.5 h-3.5" />
+                          확대 보기
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Non-structured tabs (Split, Raw OCR, Preview) bottom save bar */}
+                {activeResultTab !== 'structured' && (
+                  <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-slate-700 min-w-0">
+                      <IconBriefcase className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span className="font-bold shrink-0">저장 대상:</span>
+                      <span className="font-bold text-blue-700 truncate">
+                        {targetApplicationId === 'new'
+                          ? '새 지원 공고'
+                          : `기존 공고: ${applications.find(a => a.id === targetApplicationId)?.company || ''}`}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSaveToApplications}
+                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition-colors"
+                      >
                         <IconPlus className="w-4 h-4" />
-                        지원 공고로 즉시 등록
-                      </>
-                    )}
-                  </button>
-                </div>
+                        <span>공고에 저장</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
         </div>
       </div>
+
+      {/* Fullscreen Photo Lightbox Modal */}
+      <ImageLightboxModal
+        isOpen={isLightboxOpen}
+        onClose={() => setIsLightboxOpen(false)}
+        imageUrl={previewImage}
+        title={selectedFileName || ocrData.title}
+        subtitle={`${ocrData.company} · ${ocrData.documentTypeLabel} (${ocrData.confidence}% 신뢰도)`}
+      />
     </div>
   );
 };

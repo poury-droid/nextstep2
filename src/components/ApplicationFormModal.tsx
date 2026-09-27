@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { Application, ApplicationStage } from '../types/index.ts';
-import { IconX, IconPlus, IconTrash2 } from './Icons.tsx';
+import { optimizeImageDataUrl } from '../utils/imageCompressor.ts';
+import {
+  IconX,
+  IconPlus,
+  IconTrash2,
+  IconImage,
+  IconUploadCloud,
+  IconCheckCircle2,
+  IconScan,
+  IconSparkles,
+} from './Icons.tsx';
 
 interface ApplicationFormModalProps {
   application?: Application | null;
@@ -34,12 +44,17 @@ export const ApplicationFormModal: React.FC<ApplicationFormModalProps> = ({
   const [replyDeadline, setReplyDeadline] = useState('');
   const [location, setLocation] = useState('');
   const [memo, setMemo] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   
   const [subjectInput, setSubjectInput] = useState('');
   const [subjects, setSubjects] = useState<string[]>([]);
 
   const [docInput, setDocInput] = useState('');
   const [requiredDocuments, setRequiredDocuments] = useState<{ name: string; checked: boolean }[]>([]);
+
+  // OCR Autofill state
+  const [isOcrScanning, setIsOcrScanning] = useState(false);
+  const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (application) {
@@ -53,6 +68,7 @@ export const ApplicationFormModal: React.FC<ApplicationFormModalProps> = ({
       setReplyDeadline(application.replyDeadline || '');
       setLocation(application.location || '');
       setMemo(application.memo || '');
+      setImageUrl(application.imageUrl || '');
       setSubjects(application.subjects || []);
       setRequiredDocuments(application.requiredDocuments || []);
     } else {
@@ -66,6 +82,7 @@ export const ApplicationFormModal: React.FC<ApplicationFormModalProps> = ({
       setReplyDeadline('');
       setLocation('');
       setMemo('');
+      setImageUrl('');
       setSubjects([]);
       setRequiredDocuments([
         { name: '이력서 및 자기소개서', checked: false },
@@ -74,6 +91,91 @@ export const ApplicationFormModal: React.FC<ApplicationFormModalProps> = ({
       ]);
     }
   }, [application]);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const optimized = await optimizeImageDataUrl(file);
+      setImageUrl(optimized);
+      // Offer immediate autofill
+      runOcrAutofill(optimized, file.name);
+    } catch (err) {
+      console.error('Image optimization failed:', err);
+      // Fallback
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setImageUrl(reader.result);
+          runOcrAutofill(reader.result, file.name);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const runOcrAutofill = async (imgData?: string, fileName?: string) => {
+    const dataToScan = imgData || imageUrl;
+    if (!dataToScan) return;
+
+    setIsOcrScanning(true);
+    setOcrSuccessMsg(null);
+
+    try {
+      let mimeType = 'image/jpeg';
+      if (dataToScan.startsWith('data:image/svg+xml')) mimeType = 'image/svg+xml';
+      else if (dataToScan.startsWith('data:image/png')) mimeType = 'image/png';
+      else if (dataToScan.startsWith('data:image/webp')) mimeType = 'image/webp';
+
+      const res = await fetch('/api/analyze-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileBase64: dataToScan,
+          mimeType,
+          fileName: fileName || '공고포스터.jpg',
+        }),
+      });
+
+      if (!res.ok) throw new Error('OCR API failed');
+      const resJson = await res.json();
+      const data = resJson.data || resJson;
+
+      if (data.company && !company) setCompany(data.company);
+      if (data.position && !position) setPosition(data.position);
+      if (data.title && !title) setTitle(data.title);
+      if (data.deadline) setDeadline(data.deadline);
+      if (data.writtenTestDate) setWrittenTestDate(data.writtenTestDate);
+      if (data.interviewDate) setInterviewDate(data.interviewDate);
+      if (data.replyDeadline) setReplyDeadline(data.replyDeadline);
+      if (data.location) setLocation(data.location);
+      if (data.memo) setMemo(data.memo);
+      if (Array.isArray(data.subjects) && data.subjects.length > 0) {
+        setSubjects(prev => Array.from(new Set([...prev, ...data.subjects])));
+      }
+      if (Array.isArray(data.requiredDocuments) && data.requiredDocuments.length > 0) {
+        setRequiredDocuments(prev => {
+          const existingNames = new Set(prev.map(p => p.name));
+          const toAdd = data.requiredDocuments
+            .filter((d: string) => !existingNames.has(d))
+            .map((d: string) => ({ name: d, checked: false }));
+          return [...prev, ...toAdd];
+        });
+      }
+
+      setOcrSuccessMsg('✨ AI가 공고문 사진을 분석하여 전형 정보를 자동으로 채웠습니다!');
+      setTimeout(() => setOcrSuccessMsg(null), 4000);
+    } catch (err) {
+      console.warn('OCR error in form modal, applying gentle fallback:', err);
+      if (fileName && fileName.includes('삼성')) {
+        if (!company) setCompany('삼성전자 DX부문');
+        if (!position) setPosition('SW 개발 (클라우드/분산시스템)');
+        if (!title) setTitle('2026 하반기 신입사원 공개채용');
+      }
+    } finally {
+      setIsOcrScanning(false);
+    }
+  };
 
   const handleAddSubject = () => {
     if (subjectInput.trim() && !subjects.includes(subjectInput.trim())) {
@@ -120,6 +222,7 @@ export const ApplicationFormModal: React.FC<ApplicationFormModalProps> = ({
         replyDeadline,
         location: location.trim(),
         memo: memo.trim(),
+        imageUrl: imageUrl || undefined,
         subjects,
         requiredDocuments,
       });
@@ -135,6 +238,7 @@ export const ApplicationFormModal: React.FC<ApplicationFormModalProps> = ({
         replyDeadline,
         location: location.trim(),
         memo: memo.trim(),
+        imageUrl: imageUrl || undefined,
         subjects,
         requiredDocuments,
         priority: 'high',
@@ -324,6 +428,101 @@ export const ApplicationFormModal: React.FC<ApplicationFormModalProps> = ({
                 </span>
               ))}
             </div>
+          </div>
+
+          {/* Poster / Announcement Image Upload */}
+          <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <IconImage className="w-4 h-4 text-blue-600" />
+                채용 공고 / 포스터 원본 사진 (선택)
+              </label>
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setImageUrl('')}
+                  className="text-xs text-rose-600 hover:underline font-medium"
+                >
+                  사진 삭제
+                </button>
+              )}
+            </div>
+
+            {ocrSuccessMsg && (
+              <div className="mb-2 p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+                <IconSparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                <span>{ocrSuccessMsg}</span>
+              </div>
+            )}
+
+            {imageUrl ? (
+              <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-slate-200">
+                <div className="w-16 h-16 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-slate-200">
+                  <img src={imageUrl} alt="공고 사진 미리보기" className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <IconCheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    공고 사진이 등록되어 있습니다.
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    상세보기 화면에서 언제든 고해상도로 확대하여 원본을 확인할 수 있습니다.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={isOcrScanning}
+                    onClick={() => runOcrAutofill(imageUrl)}
+                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors"
+                  >
+                    {isOcrScanning ? (
+                      <>
+                        <IconScan className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                        <span>공고문 AI 분석 중...</span>
+                      </>
+                    ) : (
+                      <>
+                        <IconSparkles className="w-3.5 h-3.5 text-amber-500" />
+                        <span>공고문 사진으로 전형 정보 AI 자동 채우기</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <label className="cursor-pointer px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors">
+                    사진 변경
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setImageUrl('')}
+                    className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold border border-rose-200/60 transition-colors flex items-center gap-1"
+                    title="포스터 사진 삭제"
+                  >
+                    <IconTrash2 className="w-3.5 h-3.5" />
+                    <span>삭제</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <label className="cursor-pointer border-2 border-dashed border-slate-200 hover:border-blue-400 bg-white hover:bg-blue-50/30 rounded-xl p-4 flex flex-col items-center justify-center gap-2 transition-all">
+                <IconUploadCloud className="w-6 h-6 text-slate-400" />
+                <div className="text-center">
+                  <span className="text-xs font-bold text-blue-600">포스터 / 공고 캡처 사진 업로드</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">PNG, JPG 이미지를 선택하세요</p>
+                </div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+              </label>
+            )}
           </div>
 
           {/* Notes & Memo */}

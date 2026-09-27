@@ -1,5 +1,12 @@
 import { Application, Task, StudyPlan, Credential, UserProfile } from '../types/index.ts';
 import { getFutureDateString, getTodayString } from './date.ts';
+import { VISUAL_SAMPLE_DOCS } from './samplePosters.ts';
+import { createInterviewSmsSvg, createFinalNoticeSvg } from './sampleNotices.ts';
+
+const samsungDoc = VISUAL_SAMPLE_DOCS.find(d => d.id === 'samsung-dx');
+const tossDoc = VISUAL_SAMPLE_DOCS.find(d => d.id === 'toss-banking');
+const opicDoc = VISUAL_SAMPLE_DOCS.find(d => d.id === 'opic-score');
+const ticketDoc = VISUAL_SAMPLE_DOCS.find(d => d.id === 'exam-ticket-samsung');
 
 export const initialProfile: UserProfile = {
   name: '지현명',
@@ -22,6 +29,36 @@ export const initialApplications: Application[] = [
     location: '경기 성남시 분당구 1784',
     memo: '서류 합격 발표 완료! 1차 온라인 코딩테스트 및 전공 CS 지필평가 대비 중. 프로그래머스 레벨 3-4 위주 복습 필요.',
     subjects: ['알고리즘 코딩테스트', '운영체제/네트워크', '데이터베이스 최적화'],
+    imageUrl: ticketDoc?.previewDataUrl,
+    stageNotices: [
+      {
+        id: 'notice-app1-sms',
+        stage: '서류합격',
+        noticeType: 'sms',
+        title: '[서류 합격] 1차 직무면접 안내 문자 (SMS)',
+        sender: '[NAVER 채용팀]',
+        receivedDate: '2026-09-02',
+        interviewDate: getFutureDateString(22),
+        location: '경기 성남시 분당구 1784 사옥 4층 인터뷰룸',
+        locationDetail: '신분당선/수인분당선 정자역 3번 출구 도보 6분 (1784 로비 안내데스크 출입증 수령)',
+        dressCode: '단정한 자율 복장 (비즈니스 캐주얼 / 셔츠)',
+        checklistItems: [
+          { id: 'app1-chk-1', text: '본인 신분증 (주민등록증 또는 운전면허증 지참)', checked: true, category: '준비물' },
+          { id: 'app1-chk-2', text: '포트폴리오 출력본 2부 및 깃허브 코드 아키텍처 요약', checked: true, category: '준비물' },
+          { id: 'app1-chk-3', text: '1784 사옥 4층 인터뷰룸 위치 및 지하철 정자역 이동 경로 사전 확인', checked: true, category: '시험장소' },
+          { id: 'app1-chk-4', text: '면접 시작 20분 전(13:40) 1층 로비 도착 및 방문증 수령', checked: false, category: '시험장소' },
+          { id: 'app1-chk-5', text: '단정한 자율 복장 착용 점검', checked: false, category: '복장/기타' },
+        ],
+        content: `[NAVER] 안녕하세요 지현명님, 클라우드 플랫폼 백엔드 개발자 서류 전형 합격을 진심으로 축하드립니다.\n\n■ 1차 직무역량 기술면접 안내\n- 일시: 2026년 10월 4일(일) 14:00 (15분 전 도착 대기)\n- 방식: NAVER 1784 사옥 4층 인터뷰룸 대면 면접\n- 면접 내용: CS 기본기, 제출 포트폴리오 코드 아키텍처 리뷰, 직무 역량 검증\n- 준비물: 신분증(주민등록증 또는 운전면허증)\n- 복장: 단정한 자율 복장\n\n상세한 안내 및 참석 확인은 네이버 채용 포털을 확인해 주시기 바랍니다.`,
+        imageUrl: createInterviewSmsSvg('네이버 (NAVER)', '2026.10.04 (일) 14:00', 'NAVER 1784 사옥 4층 인터뷰룸'),
+        imageUrls: [
+          createInterviewSmsSvg('네이버 (NAVER)', '2026.10.04 (일) 14:00', 'NAVER 1784 사옥 4층 인터뷰룸'),
+          createFinalNoticeSvg('네이버 (NAVER)', '2026.10.04 (일) 14:00', 'NAVER 1784 사옥 4층 기술면접실 (오시는 길 및 유의사항)'),
+        ],
+        notes: 'CS 전공지식(OS, 네트워크, DB 트랜잭션) 및 깃허브 코드 리뷰 준비',
+        createdAt: '2026-09-02',
+      },
+    ],
     requiredDocuments: [
       { name: '이력서 및 포트폴리오 PDF', checked: true },
       { name: '어학 성적 증명서(TOEIC/OPIc)', checked: true },
@@ -67,6 +104,7 @@ export const initialApplications: Application[] = [
     location: '서울 강남구 테헤란로 아크플레이스',
     memo: '과제 전형 안내 메일 수신 완료. 대용량 트래픽 동시성 제어 및 분산 트랜잭션 설계가 핵심 평가 포인트.',
     subjects: ['Kotlin/Java Spring Boot', 'Kafka/Redis', 'MSA 아키텍처'],
+    imageUrl: tossDoc?.previewDataUrl,
     requiredDocuments: [
       { name: '자유 양식 이력서', checked: true },
       { name: '오픈소스 기여 내역', checked: false },
@@ -88,6 +126,32 @@ export const initialApplications: Application[] = [
     location: '경기 수원시 영통구 삼성디지털시티',
     memo: 'SW 역량테스트 합격 완료. 직무역량 면접에서 시스템 아키텍처 다이어그램 및 임원면접 인성 질문 대비 필요.',
     subjects: ['SW 역량테스트(완료)', '직무 기술면접', '창의성 면접'],
+    imageUrl: samsungDoc?.previewDataUrl,
+    stageNotices: [
+      {
+        id: 'notice-app4-sms',
+        stage: '1차면접',
+        noticeType: 'sms',
+        title: '[SW테스트 합격] 직무역량 & 창의성 면접 안내 문자',
+        sender: '[삼성전자 채용팀 031-200-XXXX]',
+        receivedDate: '2026-09-09',
+        interviewDate: getFutureDateString(9),
+        location: '경기 수원시 영통구 삼성디지털시티 인재개발원',
+        locationDetail: '수원 사업장 인재개발원 서문 안내실 (수원역 4번 출구 셔틀버스 운행)',
+        dressCode: '단정한 정장 또는 비즈니스 캐주얼 (넥타이 자율)',
+        checklistItems: [
+          { id: 'app4-chk-1', text: '삼성 채용포털 출력 수험표 지참', checked: true, category: '준비물' },
+          { id: 'app4-chk-2', text: '본인 신분증 (주민등록증 / 운전면허증 지참)', checked: true, category: '준비물' },
+          { id: 'app4-chk-3', text: '재학/졸업증명서 및 전학년 성적증명서 원본', checked: false, category: '준비물' },
+          { id: 'app4-chk-4', text: '수원디지털시티 셔틀버스 탑승 위치 사전 확인', checked: true, category: '시험장소' },
+          { id: 'app4-chk-5', text: '08:30 등록 마감 20분 전 시험장 도착 대기', checked: false, category: '시험장소' },
+        ],
+        content: `[삼성전자 DX부문] SW개발 3급 신입 채용 1차 면접 전형 안내\n\n지현명 지원자님, SW역량테스트 합격을 축하드립니다.\n직무역량 및 창의성 면접 전형 일정을 안내해 드립니다.\n\n- 일시: 2026년 9월 21일(월) 08:30 등록 (종일 진행)\n- 장소: 경기 수원시 영통구 삼성디지털시티 인재개발원\n- 준비물: 수험표, 신분증, 재학/졸업증명서\n- 복장: 정장 또는 비즈니스 캐주얼`,
+        imageUrl: createInterviewSmsSvg('삼성전자 DX', '2026.09.21 (월) 08:30', '수원 삼성디지털시티 인재개발원'),
+        notes: 'SW 문제풀이 코드 설명 및 PT 발표 연습',
+        createdAt: '2026-09-09',
+      },
+    ],
     requiredDocuments: [
       { name: '삼성 채용포털 에세이', checked: true },
       { name: '취득 자격증 사본', checked: true },
@@ -109,7 +173,64 @@ export const initialApplications: Application[] = [
     replyDeadline: '',
     location: '경기 성남시 분당구 판교역원',
     memo: '컬처핏 면접 및 최종 임원 인터뷰. 카카오 크루로서의 협업 철학 및 자기주도적 문제해결 경험 정리.',
+    stageMemos: {
+      '서류접수': '카카오 개발 블로그 아티클 및 오픈소스 기여 사례 위주로 포트폴리오 구성 완료.',
+      '서류합격': '서류 합격 통과! 1차 기술 인터뷰 코딩테스트 및 시스템 디자인 질문 집중 대비.',
+      '1차면접': '1차 기술 인터뷰(CS 및 라이브 코딩): 동시성 제어 및 Kafka 메시지 큐 활용 경험 위주로 어필 성공.',
+      '2차/최종면접': '카카오 크루 철학 및 가치관(충돌을 두려워하지 않는 자기주도성), 갈등 해결 사례, 향후 3년 기술 로드맵 철저 대비.',
+    },
     subjects: ['컬처핏 면접', '기술 심층 면접'],
+    stageNotices: [
+      {
+        id: 'notice-app5-first',
+        stage: '1차면접',
+        noticeType: 'sms',
+        title: '[서류 합격] 1차 기술 인터뷰 화상 면접 안내 문자',
+        sender: '[카카오 채용팀]',
+        receivedDate: '2026-08-28',
+        interviewDate: '2026-09-08 14:00',
+        location: '온라인 화상 면접 (Google Meet)',
+        locationDetail: '온라인 화상 회의실 링크 사전 접속 테스트 (면접 10분 전 대기)',
+        dressCode: '단정한 자율 복장',
+        checklistItems: [
+          { id: 'app5-first-chk-1', text: '화상 카메라 및 마이크 음질 사전 점검', checked: true, category: '준비물' },
+          { id: 'app5-first-chk-2', text: '본인 확인용 신분증 카메라 지참', checked: true, category: '준비물' },
+          { id: 'app5-first-chk-3', text: '라이브 코딩 IDE 및 공유 화면 환경 세팅', checked: true, category: '시험장소' },
+          { id: 'app5-first-chk-4', text: '조용하고 독립된 면접 공간 확보', checked: true, category: '시험장소' },
+        ],
+        content: `[카카오] 서류 전형 합격 및 1차 기술 인터뷰 안내\n\n지현명 지원자님, 카카오 신입 테크 공채 서류 전형 합격을 축하드립니다.\n1차 기술 인터뷰는 온라인 화상으로 진행됩니다.\n\n- 일시: 2026년 9월 8일(화) 14:00\n- 방식: 온라인 화상 면접 (면접관 2인, 60분 진행)\n- 내용: CS 기본기, 라이브 코딩 및 프로젝트 아키텍처 검증`,
+        imageUrl: createInterviewSmsSvg('카카오 (Kakao)', '2026.09.08 (화) 14:00', '온라인 화상 면접 (Google Meet)'),
+        notes: '1차 기술 인터뷰 CS 기본기 및 라이브 코딩 완료 (합격)',
+        createdAt: '2026-08-28',
+      },
+      {
+        id: 'notice-app5-final',
+        stage: '2차/최종면접',
+        noticeType: 'document',
+        title: '[1차 면접 합격] 2차 최종 임원면접 공식 안내문',
+        sender: '[카카오 인사팀 (HR)]',
+        receivedDate: '2026-09-10',
+        interviewDate: getFutureDateString(15),
+        location: '경기 성남시 분당구 판교역원 카카오 아지트 7층 접견실',
+        locationDetail: '신분당선 판교역 1번 출구 도보 2분 카카오 판교 아지트 (1층 인포데스크 출입증 수령)',
+        dressCode: '비즈니스 캐주얼 또는 깔끔한 정장 (자율)',
+        checklistItems: [
+          { id: 'app5-chk-1', text: '대학교 졸업(예정)증명서 원본 및 공인 어학 성적표 사본', checked: true, category: '준비물' },
+          { id: 'app5-chk-2', text: '본인 사진 부착 신분증 원본 (주민등록증 / 운전면허증)', checked: true, category: '준비물' },
+          { id: 'app5-chk-3', text: '판교 아지트 1층 인포데스크 출입증 수령 (30분 전 도착 완료)', checked: false, category: '시험장소' },
+          { id: 'app5-chk-4', text: '판교역 1번 출구 도보 동선 및 대기실 위치 사전 확인', checked: true, category: '시험장소' },
+          { id: 'app5-chk-5', text: '임원 면접용 1분 자기소개 및 컬처핏 답변 최종 정리', checked: false, category: '복장/기타' },
+        ],
+        content: `[카카오] 1차 기술 인터뷰 합격 안내 및 2차 최종 컬처핏 면접 일정 안내문\n\n1차 기술 인터뷰에 최종 합격하셨습니다.\n2차 최종 인터뷰는 카카오 판교 아지트에서 대면으로 진행됩니다.\n\n- 면접 일시: 2026년 9월 27일(토) 15:30\n- 장소: 경기 성남시 판교 카카오 아지트 7층 접견실\n- 면접 형식: 임원 3인 / 지원자 1인 심층 면접 (40분 진행)\n- 지참 서류: 대학교 졸업(예정)증명서 원본, 공인 어학 성적표 사본\n- 안내 사항: 면접 시작 30분 전 1층 인포데스크에서 방문 출입증을 수령하시기 바랍니다.`,
+        imageUrl: createFinalNoticeSvg('카카오 (Kakao)', '2026.09.27 (토) 15:30', '판교 카카오 아지트 7층 접견실'),
+        imageUrls: [
+          createFinalNoticeSvg('카카오 (Kakao)', '2026.09.27 (토) 15:30', '판교 카카오 아지트 7층 접견실'),
+          createInterviewSmsSvg('카카오 (Kakao)', '2026.09.27 (토) 15:30', '판교 카카오 아지트 7층 인터뷰존 (방문안내)'),
+        ],
+        notes: '카카오 크루 철학 및 갈등 해결 사례, 향후 3년 기술 로드맵 답변 준비',
+        createdAt: '2026-09-10',
+      },
+    ],
     requiredDocuments: [
       { name: '포트폴리오 최종본', checked: true },
       { name: '추천서(선택)', checked: false },
@@ -263,6 +384,7 @@ export const initialCredentials: Credential[] = [
     issuer: 'ACTFL / 멀티캠퍼스',
     acquiredDate: '2025-08-20',
     expiresAt: '2027-08-20',
+    imageUrl: opicDoc?.previewDataUrl,
     memo: '삼성전자 및 외국계 기술 기업 서류 우대 가점',
   },
   {

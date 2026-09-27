@@ -1,23 +1,89 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
-import { StudyPlan } from '../types/index.ts';
+import { StudyPlan, StudyBlock, StudyDay } from '../types/index.ts';
 import { DDayBadge } from '../components/DDayBadge.tsx';
-import { getTodayString, getFutureDateString } from '../utils/date.ts';
+import { EditStudyPlanModal } from '../components/EditStudyPlanModal.tsx';
+import { getTodayString, getFutureDateString, getDDay, formatShortDate } from '../utils/date.ts';
 import {
   IconBookOpen,
   IconPlus,
   IconClock,
   IconCheckCircle2,
   IconTrash2,
+  IconEdit3,
   IconSparkles,
   IconX,
+  IconCalendar,
 } from '../components/Icons.tsx';
 
+const TOPIC_PRESETS = [
+  '기본 이론 및 핵심 개념 집중 정립',
+  '최신 기출 빈출 유형 분석 및 문제 풀이',
+  '고난도 변형 및 실전 응용 풀이 훈련',
+  '취약 단원 개념 점검 및 오답 노트 정리',
+  '제한시간 타이머 실전 모의고사 풀이',
+  '핵심 공식/용어 키워드 백지 복습',
+  '전 영역 총정리 및 빈출 패턴 최종 점검',
+  '시험 전날 최종 요약 암기 및 컨디션 관리',
+];
+
+function generateSmartStudyDays(
+  subjects: { name: string; importance: number }[],
+  daysCount: number = 7
+): StudyDay[] {
+  return Array.from({ length: daysCount }).map((_, idx) => {
+    const dateStr = idx === 0 ? getTodayString() : getFutureDateString(idx);
+    const dDayInfo = getDDay(dateStr);
+    const dayOfWeek = idx === 0 ? '오늘' : (dDayInfo.text !== '-' ? dDayInfo.text : `Day ${idx + 1}`);
+
+    const sub1 = subjects[idx % subjects.length]?.name || '핵심 과목';
+    const sub2 = subjects[(idx + 1) % subjects.length]?.name || '실전 연습';
+    const topic1 = TOPIC_PRESETS[(idx * 2) % TOPIC_PRESETS.length];
+    const topic2 = TOPIC_PRESETS[(idx * 2 + 1) % TOPIC_PRESETS.length];
+
+    return {
+      date: dateStr,
+      dayOfWeek,
+      blocks: [
+        {
+          id: `b-${Date.now()}-${idx}-1`,
+          subject: sub1,
+          topic: topic1,
+          hours: 2,
+          completed: false,
+        },
+        {
+          id: `b-${Date.now()}-${idx}-2`,
+          subject: sub2,
+          topic: topic2,
+          hours: 2,
+          completed: false,
+        },
+      ],
+    };
+  });
+}
+
 export const StudyPlannerPage: React.FC = () => {
-  const { studyPlans, addStudyPlan, toggleStudyBlock, deleteStudyPlan, applications } = useApp();
+  const {
+    studyPlans,
+    addStudyPlan,
+    updateStudyPlan,
+    toggleStudyBlock,
+    updateStudyBlock,
+    addStudyBlock,
+    deleteStudyBlock,
+    addStudyDay,
+    deleteStudyDay,
+    deleteStudyPlan,
+    applications,
+  } = useApp();
 
   const [activePlanId, setActivePlanId] = useState<string>(studyPlans[0]?.id || '');
   const [showNewPlanModal, setShowNewPlanModal] = useState(false);
+  const [showEditPlanModal, setShowEditPlanModal] = useState(false);
+  const [showAddDayModal, setShowAddDayModal] = useState(false);
+  const [newDayDate, setNewDayDate] = useState(getFutureDateString(4));
 
   // New plan form state
   const [examName, setExamName] = useState('');
@@ -26,6 +92,18 @@ export const StudyPlannerPage: React.FC = () => {
   const [weekdayHours, setWeekdayHours] = useState(4);
   const [weekendHours, setWeekendHours] = useState(7);
   const [subjectsText, setSubjectsText] = useState('자료구조/알고리즘, 운영체제/네트워크, 데이터베이스/SQL');
+
+  // Block editing state
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [editSubject, setEditSubject] = useState('');
+  const [editTopic, setEditTopic] = useState('');
+  const [editHours, setEditHours] = useState(2);
+
+  // Block adding state (by day date)
+  const [addingBlockDayDate, setAddingBlockDayDate] = useState<string | null>(null);
+  const [newBlockSubject, setNewBlockSubject] = useState('');
+  const [newBlockTopic, setNewBlockTopic] = useState('');
+  const [newBlockHours, setNewBlockHours] = useState(2);
 
   const currentPlan = studyPlans.find(p => p.id === activePlanId) || studyPlans[0];
 
@@ -51,40 +129,7 @@ export const StudyPlannerPage: React.FC = () => {
         currentLevel: '중급',
       }));
 
-    // Auto-generate 7 days of smart study blocks
-    const generatedDays = [
-      {
-        date: getTodayString(),
-        dayOfWeek: '오늘',
-        blocks: [
-          { id: `b-${Date.now()}-1`, subject: subjectsList[0]?.name || '핵심 개념', topic: '기본 이론 정립 및 빈출 유형 정리', hours: 2, completed: false },
-          { id: `b-${Date.now()}-2`, subject: subjectsList[1]?.name || '문제 풀이', topic: '실전 기출 문제 집중 풀이 3제', hours: 2, completed: false },
-        ],
-      },
-      {
-        date: getFutureDateString(1),
-        dayOfWeek: 'D-13',
-        blocks: [
-          { id: `b-${Date.now()}-3`, subject: subjectsList[0]?.name || '심화 응용', topic: '고난도 변형 유형 풀이 및 오답 체크', hours: 2.5, completed: false },
-          { id: `b-${Date.now()}-4`, subject: subjectsList[2]?.name || '암기/정리', topic: '핵심 요약 노트 작성 및 키워드 암기', hours: 1.5, completed: false },
-        ],
-      },
-      {
-        date: getFutureDateString(2),
-        dayOfWeek: 'D-12',
-        blocks: [
-          { id: `b-${Date.now()}-5`, subject: subjectsList[1]?.name || '실전 연습', topic: '시간 제한 타이머 실전 모의고사 1회', hours: 3, completed: false },
-        ],
-      },
-      {
-        date: getFutureDateString(3),
-        dayOfWeek: 'D-11',
-        blocks: [
-          { id: `b-${Date.now()}-6`, subject: '오답 노트', topic: '틀린 문제 원인 분석 및 유사 문제 재풀이', hours: 2, completed: false },
-          { id: `b-${Date.now()}-7`, subject: subjectsList[0]?.name || '약점 보완', topic: '취약 단원 개념 복습', hours: 2, completed: false },
-        ],
-      },
-    ];
+    const generatedDays = generateSmartStudyDays(subjectsList, 7);
 
     addStudyPlan({
       applicationId: selectedAppId || undefined,
@@ -103,6 +148,75 @@ export const StudyPlannerPage: React.FC = () => {
     setExamName('');
   };
 
+  const handleSavePlanSettings = (updates: Partial<StudyPlan>, regenerateSchedule?: boolean) => {
+    if (!currentPlan) return;
+
+    if (regenerateSchedule) {
+      const targetSubjects = updates.subjects || currentPlan.subjects;
+      const newDays = generateSmartStudyDays(targetSubjects, 7);
+      updateStudyPlan(currentPlan.id, {
+        ...updates,
+        days: newDays,
+      });
+    } else {
+      updateStudyPlan(currentPlan.id, updates);
+    }
+  };
+
+  const handleStartEditBlock = (block: StudyBlock) => {
+    setEditingBlockId(block.id);
+    setEditSubject(block.subject);
+    setEditTopic(block.topic);
+    setEditHours(block.hours);
+  };
+
+  const handleSaveBlockEdit = (planId: string, blockId: string) => {
+    if (!editTopic.trim() || !editSubject.trim()) return;
+    updateStudyBlock(planId, blockId, {
+      subject: editSubject.trim(),
+      topic: editTopic.trim(),
+      hours: Number(editHours) || 1,
+    });
+    setEditingBlockId(null);
+  };
+
+  const handleStartAddBlock = (dayDate: string) => {
+    setAddingBlockDayDate(dayDate);
+    setNewBlockSubject(currentPlan?.subjects[0]?.name || '공통');
+    setNewBlockTopic('');
+    setNewBlockHours(2);
+  };
+
+  const handleSaveNewBlock = (planId: string, dayDate: string) => {
+    if (!newBlockTopic.trim()) return;
+    addStudyBlock(planId, dayDate, {
+      subject: newBlockSubject.trim() || '공통',
+      topic: newBlockTopic.trim(),
+      hours: Number(newBlockHours) || 1,
+    });
+    setAddingBlockDayDate(null);
+  };
+
+  const handleAddDaySubmit = () => {
+    if (!newDayDate || !currentPlan) return;
+    const dDay = getDDay(newDayDate);
+    const dayLabel = dDay.text !== '-' ? dDay.text : formatShortDate(newDayDate);
+    addStudyDay(currentPlan.id, newDayDate, dayLabel);
+    setShowAddDayModal(false);
+  };
+
+  const handleRegenerateEntireSchedule = () => {
+    if (!currentPlan) return;
+    if (
+      window.confirm(
+        `[${currentPlan.examName}]의 등록 과목에 맞춰 일자별 과제를 새로 자동 재분배하시겠습니까?\n(기존 입력된 과제 블록이 새로 갱신됩니다)`
+      )
+    ) {
+      const refreshedDays = generateSmartStudyDays(currentPlan.subjects, 7);
+      updateStudyPlan(currentPlan.id, { days: refreshedDays });
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Top Header & Selector */}
@@ -113,7 +227,7 @@ export const StudyPlannerPage: React.FC = () => {
             시험 대비 데일리 공부 플래너
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            목표 시험일까지의 기간과 공부 가능 시간에 맞춘 맞춤형 과목 분배 일정표입니다.
+            목표 시험일까지의 자동 생성된 계획을 자유롭게 수정, 추가, 재분배할 수 있습니다.
           </p>
         </div>
 
@@ -139,7 +253,7 @@ export const StudyPlannerPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowNewPlanModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs shrink-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl shadow-xs shrink-0 transition-colors"
           >
             <IconPlus className="w-4 h-4" />
             <span>새 계획</span>
@@ -158,22 +272,40 @@ export const StudyPlannerPage: React.FC = () => {
                     목표 시험
                   </span>
                   <DDayBadge dateStr={currentPlan.examDate} size="md" />
+                  {currentPlan.targetScoreOrRank && (
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-700">
+                      {currentPlan.targetScoreOrRank}
+                    </span>
+                  )}
                 </div>
                 <h3 className="text-xl font-extrabold text-slate-900 mt-1">
                   {currentPlan.examName}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  시험 예정일: {currentPlan.examDate} · 평일 하루 {currentPlan.weekdayHours}시간 / 주말 {currentPlan.weekendHours}시간
+                  시험 예정일: {currentPlan.examDate} · 평일 {currentPlan.weekdayHours}시간 / 주말 {currentPlan.weekendHours}시간
                 </p>
               </div>
 
-              <div className="flex items-center gap-4">
-                <div className="text-right">
+              <div className="flex items-center gap-3">
+                <div className="text-right mr-2">
                   <span className="text-xs text-slate-500 font-medium block">학습 달성률</span>
                   <span className="text-2xl font-black text-purple-700">
                     {progressPercent}%
                   </span>
                 </div>
+
+                {/* Edit Plan Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowEditPlanModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-colors shadow-2xs"
+                  title="플랜 기본 정보 수정"
+                >
+                  <IconEdit3 className="w-3.5 h-3.5" />
+                  <span>계획 수정</span>
+                </button>
+
+                {/* Delete Plan Button */}
                 <button
                   type="button"
                   onClick={() => {
@@ -181,7 +313,7 @@ export const StudyPlannerPage: React.FC = () => {
                       deleteStudyPlan(currentPlan.id);
                     }
                   }}
-                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors border border-transparent hover:border-rose-100"
                   title="플랜 삭제"
                 >
                   <IconTrash2 className="w-4 h-4" />
@@ -199,28 +331,58 @@ export const StudyPlannerPage: React.FC = () => {
               </div>
               <div className="flex justify-between text-xs text-slate-400 mt-1.5">
                 <span>완료: {completedBlocks}개 블록</span>
-                <span>전체: {totalBlocks}개 블록</span>
+                <span>전체: {totalBlocks}개 과제 블록</span>
               </div>
             </div>
 
-            {/* Subjects Chips */}
-            <div className="mt-4 flex flex-wrap gap-2">
-              {currentPlan.subjects.map((sub, idx) => (
-                <span
-                  key={idx}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-medium"
-                >
-                  {sub.name} (중요도: {'★'.repeat(sub.importance)})
-                </span>
-              ))}
+            {/* Subjects Chips & Quick Action */}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs font-bold text-slate-400 mr-1">대비 과목:</span>
+                {currentPlan.subjects.map((sub, idx) => (
+                  <span
+                    key={idx}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-medium"
+                  >
+                    {sub.name} (중요도: {'★'.repeat(sub.importance)})
+                  </span>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleRegenerateEntireSchedule}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 bg-purple-50/60 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200/60 transition-colors"
+                title="과목 기준 스케줄 다시 자동 분배"
+              >
+                <IconSparkles className="w-3.5 h-3.5 text-purple-600" />
+                스케줄 자동 재분배
+              </button>
             </div>
           </div>
 
           {/* Daily Schedule Timetable */}
           <div className="space-y-4">
-            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
-              일자별 학습 과제 및 체크리스트
-            </h4>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  일자별 학습 과제 및 체크리스트
+                  <span className="text-xs font-medium text-slate-500 normal-case">
+                    (과제 수정, 시간 변경, 과제 추가 가능)
+                  </span>
+                </h4>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddDayModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-2xs transition-colors"
+                >
+                  <IconCalendar className="w-3.5 h-3.5 text-slate-500" />
+                  <span>+ 공부 날짜 추가</span>
+                </button>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {currentPlan.days.map((day, dIdx) => (
@@ -229,6 +391,7 @@ export const StudyPlannerPage: React.FC = () => {
                   className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs flex flex-col justify-between"
                 >
                   <div>
+                    {/* Day Header */}
                     <div className="flex items-center justify-between pb-2.5 mb-3 border-b border-slate-100">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-900 text-sm">{day.date}</span>
@@ -236,41 +399,269 @@ export const StudyPlannerPage: React.FC = () => {
                           {day.dayOfWeek}
                         </span>
                       </div>
-                      <DDayBadge dateStr={day.date} size="sm" />
+                      <div className="flex items-center gap-2">
+                        <DDayBadge dateStr={day.date} size="sm" />
+                        {currentPlan.days.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (confirm(`[${day.date}] 일정을 플래너에서 삭제하시겠습니까?`)) {
+                                deleteStudyDay(currentPlan.id, day.date);
+                              }
+                            }}
+                            className="text-slate-300 hover:text-rose-500 p-1 transition-colors"
+                            title="이 날짜 일정 삭제"
+                          >
+                            <IconTrash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
 
+                    {/* Day Study Blocks */}
                     <div className="space-y-2.5">
-                      {day.blocks.map(block => (
-                        <label
-                          key={block.id}
-                          className="flex items-start gap-3 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={block.completed}
-                            onChange={() => toggleStudyBlock(currentPlan.id, block.id)}
-                            className="mt-0.5 w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-bold text-purple-700">
-                                {block.subject}
-                              </span>
-                              <span className="text-[11px] text-slate-400 font-medium">
-                                ({block.hours}시간)
-                              </span>
-                            </div>
-                            <p
-                              className={`text-xs mt-0.5 leading-relaxed ${
-                                block.completed ? 'line-through text-slate-400' : 'text-slate-800 font-medium'
-                              }`}
+                      {day.blocks.map(block => {
+                        const isEditingThisBlock = editingBlockId === block.id;
+
+                        if (isEditingThisBlock) {
+                          return (
+                            <div
+                              key={block.id}
+                              className="p-3 rounded-xl border-2 border-purple-400 bg-purple-50/50 space-y-2.5"
                             >
-                              {block.topic}
-                            </p>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                                  <IconEdit3 className="w-3.5 h-3.5 text-purple-600" />
+                                  학습 과제 수정
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingBlockId(null)}
+                                  className="text-slate-400 hover:text-slate-600"
+                                >
+                                  <IconX className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-2">
+                                <div className="col-span-2">
+                                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                                    과목명
+                                  </label>
+                                  <input
+                                    type="text"
+                                    list={`subjects-list-${block.id}`}
+                                    value={editSubject}
+                                    onChange={e => setEditSubject(e.target.value)}
+                                    className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                  />
+                                  <datalist id={`subjects-list-${block.id}`}>
+                                    {currentPlan.subjects.map((s, sIdx) => (
+                                      <option key={sIdx} value={s.name} />
+                                    ))}
+                                  </datalist>
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                                    시간 (h)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="0.5"
+                                    min="0.5"
+                                    max="16"
+                                    value={editHours}
+                                    onChange={e => setEditHours(Number(e.target.value))}
+                                    className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                                  학습 내용 및 문제 목표
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editTopic}
+                                  onChange={e => setEditTopic(e.target.value)}
+                                  className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                />
+                              </div>
+
+                              <div className="flex justify-end gap-1.5 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingBlockId(null)}
+                                  className="px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                                >
+                                  취소
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveBlockEdit(currentPlan.id, block.id)}
+                                  className="px-3.5 py-1 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors shadow-2xs"
+                                >
+                                  수정 저장
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={block.id}
+                            className="group flex items-start justify-between gap-2 p-2.5 rounded-xl border border-slate-100 hover:border-purple-200 hover:bg-purple-50/20 transition-colors"
+                          >
+                            <label className="flex items-start gap-3 min-w-0 flex-1 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={block.completed}
+                                onChange={() => toggleStudyBlock(currentPlan.id, block.id)}
+                                className="mt-0.5 w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-bold text-purple-700">
+                                    {block.subject}
+                                  </span>
+                                  <span className="text-[11px] text-slate-400 font-medium">
+                                    ({block.hours}시간)
+                                  </span>
+                                </div>
+                                <p
+                                  className={`text-xs mt-0.5 leading-relaxed ${
+                                    block.completed ? 'line-through text-slate-400' : 'text-slate-800 font-medium'
+                                  }`}
+                                >
+                                  {block.topic}
+                                </p>
+                              </div>
+                            </label>
+
+                            {/* Block Action Buttons */}
+                            <div className="flex items-center gap-1 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditBlock(block)}
+                                className="p-1 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
+                                title="과제 수정"
+                              >
+                                <IconEdit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteStudyBlock(currentPlan.id, block.id)}
+                                className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
+                                title="과제 삭제"
+                              >
+                                <IconTrash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
-                        </label>
-                      ))}
+                        );
+                      })}
+
+                      {day.blocks.length === 0 && (
+                        <p className="text-xs text-slate-400 italic py-2 text-center">
+                          등록된 과제가 없습니다. 아래에서 새 과제를 추가해 보세요.
+                        </p>
+                      )}
                     </div>
+
+                    {/* Inline Add Block Form */}
+                    {addingBlockDayDate === day.date ? (
+                      <div className="p-3 rounded-xl border border-dashed border-purple-300 bg-purple-50/40 space-y-2.5 mt-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                            <IconPlus className="w-3.5 h-3.5 text-purple-600" />
+                            새 과제 추가 ({day.date})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setAddingBlockDayDate(null)}
+                            className="text-slate-400 hover:text-slate-600"
+                          >
+                            <IconX className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="col-span-2">
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              과목
+                            </label>
+                            <input
+                              type="text"
+                              list={`new-subjects-list-${day.date}`}
+                              value={newBlockSubject}
+                              onChange={e => setNewBlockSubject(e.target.value)}
+                              placeholder="예: 알고리즘"
+                              className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                            />
+                            <datalist id={`new-subjects-list-${day.date}`}>
+                              {currentPlan.subjects.map((s, sIdx) => (
+                                <option key={sIdx} value={s.name} />
+                              ))}
+                            </datalist>
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                              시간 (h)
+                            </label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0.5"
+                              max="16"
+                              value={newBlockHours}
+                              onChange={e => setNewBlockHours(Number(e.target.value))}
+                              className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            학습 내용 / 문제 풀이 계획
+                          </label>
+                          <input
+                            type="text"
+                            value={newBlockTopic}
+                            onChange={e => setNewBlockTopic(e.target.value)}
+                            placeholder="예: 백준 DFS/BFS 실버 3문제 풀이 및 복습"
+                            className="w-full text-xs px-2.5 py-1.5 border border-slate-200 rounded-lg bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setAddingBlockDayDate(null)}
+                            className="px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                          >
+                            취소
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveNewBlock(currentPlan.id, day.date)}
+                            className="px-3.5 py-1 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors shadow-2xs"
+                          >
+                            과제 등록
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleStartAddBlock(day.date)}
+                        className="w-full py-2 mt-3 rounded-xl border border-dashed border-slate-200 hover:border-purple-300 hover:bg-purple-50/40 text-xs font-semibold text-slate-500 hover:text-purple-700 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <IconPlus className="w-3.5 h-3.5" />
+                        <span>학습 과제 추가</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -294,6 +685,68 @@ export const StudyPlannerPage: React.FC = () => {
             <IconPlus className="w-4 h-4" />
             플랜 생성하기
           </button>
+        </div>
+      )}
+
+      {/* Edit Existing Plan Modal */}
+      {currentPlan && (
+        <EditStudyPlanModal
+          isOpen={showEditPlanModal}
+          onClose={() => setShowEditPlanModal(false)}
+          plan={currentPlan}
+          applications={applications}
+          onSave={handleSavePlanSettings}
+        />
+      )}
+
+      {/* Add Study Day Modal */}
+      {showAddDayModal && currentPlan && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <IconCalendar className="w-4 h-4 text-purple-600" />
+                공부 일정 날짜 추가
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowAddDayModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <IconX className="w-4 h-4" />
+              </button>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                추가할 날짜 선택
+              </label>
+              <input
+                type="date"
+                value={newDayDate}
+                onChange={e => setNewDayDate(e.target.value)}
+                className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                선택한 날짜가 데일리 스케줄 목록에 추가되며, 새 과제를 등록할 수 있습니다.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowAddDayModal(false)}
+                className="px-3 py-1.5 text-xs text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleAddDaySubmit}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 transition-colors"
+              >
+                날짜 추가
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

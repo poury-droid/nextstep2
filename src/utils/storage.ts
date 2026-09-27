@@ -16,7 +16,21 @@ export function loadApplications(): Application[] {
       saveApplications(initialApplications);
       return initialApplications;
     }
-    return JSON.parse(data);
+    const apps: Application[] = JSON.parse(data);
+    // Gracefully merge initial sample notices & stageMemos if missing in existing localStorage
+    return apps.map(app => {
+      const initApp = initialApplications.find(a => a.id === app.id);
+      if (initApp) {
+        const existingNoticeIds = new Set((app.stageNotices || []).map(n => n.id));
+        const missingInitNotices = (initApp.stageNotices || []).filter(n => !existingNoticeIds.has(n.id));
+        return {
+          ...app,
+          stageMemos: { ...(initApp.stageMemos || {}), ...(app.stageMemos || {}) },
+          stageNotices: [...(app.stageNotices || []), ...missingInitNotices],
+        };
+      }
+      return app;
+    });
   } catch {
     return initialApplications;
   }
