@@ -1,12 +1,9 @@
 {
-  "projectId": "cosmic-bus-62ts5",
-  "appId": "1:852530371859:web:359cda97eebe1818b8cee6",
-  "apiKey": "AIzaSyDmHpSqup07l2H7dwmnyeCRTjMW8w3-5wM",
-  "authDomain": "cosmic-bus-62ts5.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-llmprojectmj-a36effdc-894e-4913-bbba-e39cae55b468",
-  "storageBucket": "cosmic-bus-62ts5.firebasestorage.app",
-  "messagingSenderId": "852530371859",
-  "measurementId": "",
-  "oAuthClientId": "852530371859-kjtjcjsnobqr0etq8a2nsr0tjnpsrfjk.apps.googleusercontent.com",
-  "recaptchaSiteKey": ""
+  "projectId": "nextstep-23a23",
+  "appId": "1:330026392742:web:cd1885bde6483080d7a867",
+  "apiKey": "AIzaSyDZzzqU3W3W95NEsQycuoGt5D1FbjcX9ZY",
+  "authDomain": "nextstep-23a23.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "nextstep-23a23.firebasestorage.app",
+  "messagingSenderId": "330026392742"
 }

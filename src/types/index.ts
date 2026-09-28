@@ -119,6 +119,7 @@ export interface UserProfile {
   email: string;
   targetRole: string;
   avatarInitials: string;
+  photoURL?: string; // Google 계정 프로필 사진 (로그인 시)
 }
 
 export interface OcrAnalysisResult {

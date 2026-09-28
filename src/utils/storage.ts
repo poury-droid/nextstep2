@@ -128,10 +128,3 @@ export function saveProfile(profile: UserProfile): void {
   }
 }
 
-export function resetAllData(): void {
-  localStorage.removeItem(STORAGE_KEYS.APPLICATIONS);
-  localStorage.removeItem(STORAGE_KEYS.TASKS);
-  localStorage.removeItem(STORAGE_KEYS.STUDY_PLANS);
-  localStorage.removeItem(STORAGE_KEYS.CREDENTIALS);
-  localStorage.removeItem(STORAGE_KEYS.PROFILE);
-}

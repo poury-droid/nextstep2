@@ -580,14 +580,6 @@ export const DocumentAnalyzerPage: React.FC = () => {
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => setImageRotation(prev => (prev + 90) % 360)}
-                    className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                    title="90도 회전"
-                  >
-                    <IconRotateCw className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setIsLightboxOpen(true)}
                     className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors"
                     title="전체화면으로 사진 크게 보기"
@@ -620,16 +612,6 @@ export const DocumentAnalyzerPage: React.FC = () => {
                   </span>
                 </div>
               </div>
-
-              <div className="flex items-center justify-end text-[11px] text-slate-500 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setIsLightboxOpen(true)}
-                  className="text-blue-600 font-bold hover:underline"
-                >
-                  전체화면 &rarr;
-                </button>
-              </div>
             </div>
           )}
         </div>
@@ -645,70 +627,10 @@ export const DocumentAnalyzerPage: React.FC = () => {
                     <IconScan className="w-5 h-5 text-blue-600" />
                     공고문 AI 분석 결과
                   </h3>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
-                    신뢰도 {ocrData.confidence}%
-                  </span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {ocrData.documentTypeLabel} ({ocrData.company}) · {ocrData.wordCount}개 단어 감지
+                  {ocrData.documentTypeLabel} · 내용을 확인하고 필요하면 고친 뒤 저장하세요.
                 </p>
-              </div>
-
-              {/* View Switcher Tabs */}
-              <div className="flex flex-wrap rounded-xl bg-slate-100 p-1 self-start sm:self-center">
-                <button
-                  type="button"
-                  onClick={() => setActiveResultTab('structured')}
-                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                    activeResultTab === 'structured'
-                      ? 'bg-white text-blue-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <IconFileSearch className="w-3.5 h-3.5" />
-                  전형 구조화
-                </button>
-                {previewImage && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveResultTab('split')}
-                    className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                      activeResultTab === 'split'
-                        ? 'bg-white text-blue-700 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                    title="사진 원본과 추출 결과를 좌우로 나란히 비교"
-                  >
-                    <IconColumns className="w-3.5 h-3.5" />
-                    사진 나란히 대조
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setActiveResultTab('rawOcr')}
-                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                    activeResultTab === 'rawOcr'
-                      ? 'bg-white text-blue-700 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <IconScan className="w-3.5 h-3.5" />
-                  추출 원문 텍스트
-                </button>
-                {previewImage && (
-                  <button
-                    type="button"
-                    onClick={() => setActiveResultTab('preview')}
-                    className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                      activeResultTab === 'preview'
-                        ? 'bg-white text-blue-700 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <IconImage className="w-3.5 h-3.5" />
-                    사진 뷰어
-                  </button>
-                )}
               </div>
             </div>
 
@@ -727,7 +649,7 @@ export const DocumentAnalyzerPage: React.FC = () => {
             ) : (
               <>
                 {/* Result Tab 1: Structured AI Analysis */}
-                {activeResultTab === 'structured' && (
+                {(
                   <div className="space-y-4">
                     {/* Company & Position */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -991,223 +913,7 @@ export const DocumentAnalyzerPage: React.FC = () => {
                             </span>
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setCurrentTab('study')}
-                          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-colors shrink-0"
-                          title="공부 플래너로 이동"
-                        >
-                          <IconBookOpen className="w-4 h-4 text-indigo-600" />
-                          <span>학습 플래너</span>
-                        </button>
                       </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Result Tab 2: Split View (Side-by-Side: Image vs Extracted Data) */}
-                {activeResultTab === 'split' && previewImage && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between pb-1">
-                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <IconColumns className="w-3.5 h-3.5 text-blue-600" />
-                        사진과 추출 결과 대조
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setIsLightboxOpen(true)}
-                        className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                      >
-                        <IconMaximize2 className="w-3.5 h-3.5" />
-                        전체화면
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Left: Source Image */}
-                      <div className="bg-slate-900 rounded-xl p-2 flex flex-col items-center justify-center relative group min-h-[360px]">
-                        <img
-                          src={previewImage}
-                          alt="대조용 원본 사진"
-                          style={{ transform: `rotate(${imageRotation}deg)` }}
-                          className="max-h-[350px] max-w-full object-contain cursor-pointer transition-transform group-hover:scale-[1.02]"
-                          onClick={() => setIsLightboxOpen(true)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setIsLightboxOpen(true)}
-                          className="absolute bottom-3 right-3 px-2.5 py-1.5 rounded-lg bg-slate-900/80 text-white text-[11px] font-bold backdrop-blur-sm border border-white/20 hover:bg-slate-800 transition-colors flex items-center gap-1"
-                        >
-                          <IconZoomIn className="w-3.5 h-3.5" />
-                          확대 보기
-                        </button>
-                      </div>
-
-                      {/* Right: Key Extracted Schedules */}
-                      <div className="space-y-3">
-                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
-                          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                            회사 및 공고명
-                          </span>
-                          <p className="text-sm font-black text-slate-900">{ocrData.company}</p>
-                          <p className="text-xs text-slate-600 font-medium">{ocrData.position}</p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="p-2.5 bg-rose-50/70 border border-rose-100 rounded-xl flex items-center justify-between">
-                            <span className="text-xs font-bold text-rose-800">서류 접수 마감</span>
-                            <span className="text-xs font-black text-rose-900">{ocrData.deadline || '상시'}</span>
-                          </div>
-
-                          {ocrData.writtenTestDate && (
-                            <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center justify-between">
-                              <span className="text-xs font-bold text-indigo-800">필기/코딩테스트</span>
-                              <span className="text-xs font-black text-indigo-900">{ocrData.writtenTestDate}</span>
-                            </div>
-                          )}
-
-                          {ocrData.interviewDate && (
-                            <div className="p-2.5 bg-purple-50/70 border border-purple-100 rounded-xl flex items-center justify-between">
-                              <span className="text-xs font-bold text-purple-800">면접 전형일</span>
-                              <span className="text-xs font-black text-purple-900">{ocrData.interviewDate}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Extracted Requirements Preview */}
-                        {ocrData.subjects.length > 0 && (
-                          <div className="p-3 bg-white border border-slate-200 rounded-xl">
-                            <span className="text-[11px] font-bold text-slate-500 block mb-1.5">인식된 과목/스킬</span>
-                            <div className="flex flex-wrap gap-1">
-                              {ocrData.subjects.slice(0, 4).map((s, i) => (
-                                <span key={i} className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium">
-                                  {s}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Result Tab 3: Raw OCR Extracted Text */}
-                {activeResultTab === 'rawOcr' && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-700">
-                          추출 텍스트 원문
-                        </span>
-                        <span className="text-[11px] text-slate-400">
-                          {ocrData.lineCount}줄 · {ocrData.wordCount}단어
-                        </span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={handleCopyOcrText}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-2xs transition-colors"
-                      >
-                        {copiedNotification ? (
-                          <>
-                            <IconCheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            <span className="text-emerald-700 font-bold">복사 완료!</span>
-                          </>
-                        ) : (
-                          <>
-                            <IconCopy className="w-3.5 h-3.5 text-slate-500" />
-                            전체 텍스트 복사
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="relative">
-                      <textarea
-                        rows={14}
-                        value={ocrData.ocrRawText}
-                        onChange={e => setOcrData({ ...ocrData, ocrRawText: e.target.value })}
-                        className="w-full p-4 bg-slate-900 text-slate-100 font-mono text-xs leading-relaxed rounded-xl border border-slate-800 focus:ring-2 focus:ring-blue-500/30 selection:bg-blue-600"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Result Tab 4: Original Image Preview with Controls */}
-                {activeResultTab === 'preview' && previewImage && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="text-xs font-bold text-slate-800">
-                          원본 사진
-                        </span>
-                        <p className="text-[11px] text-slate-400">{selectedFileName}</p>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => setImageRotation(prev => (prev + 90) % 360)}
-                          className="px-2.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1"
-                        >
-                          <IconRotateCw className="w-3.5 h-3.5" />
-                          90° 회전
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setIsLightboxOpen(true)}
-                          className="px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-colors flex items-center gap-1"
-                        >
-                          <IconMaximize2 className="w-3.5 h-3.5" />
-                          전체화면 확대
-                        </button>
-                      </div>
-                    </div>
-
-                    <div
-                      className="rounded-xl border border-slate-200 bg-slate-900 p-4 overflow-hidden flex items-center justify-center min-h-[380px] max-h-[500px] cursor-pointer relative group"
-                      onClick={() => setIsLightboxOpen(true)}
-                    >
-                      <img
-                        src={previewImage}
-                        alt="OCR 원본 미리보기"
-                        style={{ transform: `rotate(${imageRotation}deg)` }}
-                        className="max-h-[460px] max-w-full object-contain rounded-lg shadow-md transition-transform group-hover:scale-[1.01]"
-                      />
-                      <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-                        <span className="px-3.5 py-1.5 rounded-xl bg-slate-900/80 text-white text-xs font-bold shadow-lg backdrop-blur-sm flex items-center gap-1.5">
-                          <IconZoomIn className="w-3.5 h-3.5" />
-                          확대 보기
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Non-structured tabs (Split, Raw OCR, Preview) bottom save bar */}
-                {activeResultTab !== 'structured' && (
-                  <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs text-slate-700 min-w-0">
-                      <IconBriefcase className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                      <span className="font-bold shrink-0">저장 대상:</span>
-                      <span className="font-bold text-blue-700 truncate">
-                        {targetApplicationId === 'new'
-                          ? '새 지원 공고'
-                          : `기존 공고: ${applications.find(a => a.id === targetApplicationId)?.company || ''}`}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleSaveToApplications}
-                        className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition-colors"
-                      >
-                        <IconPlus className="w-4 h-4" />
-                        <span>공고에 저장</span>
-                      </button>
                     </div>
                   </div>
                 )}
@@ -1223,7 +929,7 @@ export const DocumentAnalyzerPage: React.FC = () => {
         onClose={() => setIsLightboxOpen(false)}
         imageUrl={previewImage}
         title={selectedFileName || ocrData.title}
-        subtitle={`${ocrData.company} · ${ocrData.documentTypeLabel} (${ocrData.confidence}% 신뢰도)`}
+        subtitle={`${ocrData.company} · ${ocrData.documentTypeLabel}`}
       />
     </div>
   );

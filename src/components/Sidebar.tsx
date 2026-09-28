@@ -7,17 +7,18 @@ import {
   IconBookOpen,
   IconAward,
   IconCheckSquare,
-  IconPlus,
 } from './Icons.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
+import { GoogleSignInButton, SyncStatusBadge, UserAvatar } from './AuthButton.tsx';
 
 interface SidebarProps {
-  onOpenNewAppModal: () => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewAppModal, isMobileOpen = false, onCloseMobile }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen = false, onCloseMobile }) => {
   const { currentTab, setCurrentTab, applications, tasks, studyPlans, credentials, profile } = useApp();
+  const { user, authLoading, signOutUser } = useAuth();
 
   const activeAppsCount = applications.filter(a => a.stage !== '최종합격' && a.stage !== '불합격').length;
   const pendingTasksCount = tasks.filter(t => !t.completed).length;
@@ -92,23 +93,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewAppModal, isMobileOpe
           </div>
         </div>
 
-        {/* Quick Action: New Application */}
-        <div className="p-4">
-          <button
-            type="button"
-            onClick={() => {
-              onOpenNewAppModal();
-              onCloseMobile?.();
-            }}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 px-4 rounded-xl shadow-xs transition-colors"
-          >
-            <IconPlus className="w-4 h-4" />
-            <span>새 지원 공고 등록</span>
-          </button>
-        </div>
-
         {/* Navigation Menu */}
-        <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 pt-4 pb-2 space-y-1 overflow-y-auto">
           <div className="px-3 pb-1 text-[11px] font-bold tracking-wider text-slate-400 uppercase">
             전형 관리 메뉴
           </div>
@@ -184,15 +170,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewAppModal, isMobileOpe
 
         {/* User Account Profile */}
         <div className="p-3 border-t border-slate-100">
-          <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-700 to-slate-900 text-white flex items-center justify-center font-bold text-xs tracking-tight shadow-xs">
-              {profile.avatarInitials}
+          {user ? (
+            <>
+              <div className="flex items-center gap-3 px-2 py-1.5 rounded-lg">
+                <UserAvatar size="w-9 h-9" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-slate-800 truncate">{profile.name}</p>
+                  <p className="text-[11px] text-slate-400 truncate">{profile.email}</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between px-2 pt-1.5">
+                <SyncStatusBadge />
+                <button
+                  type="button"
+                  onClick={() => signOutUser()}
+                  className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 transition-colors"
+                >
+                  로그아웃
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="px-2 py-1.5 space-y-2">
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                지금은 이 브라우저에만 저장됩니다. 로그인하면 Firestore 에 저장되어 어느 기기에서나 이어서 볼 수 있어요.
+              </p>
+              {authLoading ? (
+                <div className="h-8 rounded-lg bg-slate-100 animate-pulse" />
+              ) : (
+                <GoogleSignInButton fullWidth />
+              )}
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold text-slate-800 truncate">{profile.name}</p>
-              <p className="text-[11px] text-slate-400 truncate">{profile.email}</p>
-            </div>
-          </div>
+          )}
         </div>
       </aside>
     </>

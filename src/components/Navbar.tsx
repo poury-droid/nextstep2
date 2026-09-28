@@ -1,14 +1,14 @@
 import React from 'react';
 import { useApp } from '../context/AppContext.tsx';
-import { IconMenu, IconPlus, IconSparkles } from './Icons.tsx';
+import { IconMenu, IconSparkles } from './Icons.tsx';
+import { AuthButton, SyncStatusBadge } from './AuthButton.tsx';
 
 interface NavbarProps {
   onToggleMobileMenu: () => void;
-  onOpenNewAppModal: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, onOpenNewAppModal }) => {
-  const { currentTab, setCurrentTab, resetData } = useApp();
+export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu }) => {
+  const { currentTab, setCurrentTab } = useApp();
 
   const tabTitles: Record<string, { title: string; desc: string }> = {
     dashboard: { title: '한눈에 보기', desc: '전형 일정, D-Day, 오늘 할 일과 공부 계획을 한눈에 파악하세요.' },
@@ -46,27 +46,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobileMenu, onOpenNewApp
       </div>
 
       <div className="flex items-center gap-2.5">
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm('예시 데이터를 초기 상태로 복원하시겠습니까?')) {
-              resetData();
-            }
-          }}
-          className="text-xs font-medium text-slate-500 hover:text-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
-          title="초기 예시 데이터 복원"
-        >
-          데이터 초기화
-        </button>
+        <SyncStatusBadge className="hidden lg:inline-flex" />
 
-        <button
-          type="button"
-          onClick={onOpenNewAppModal}
-          className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-xs transition-colors"
-        >
-          <IconPlus className="w-4 h-4" />
-          <span className="hidden xs:inline">공고 추가</span>
-        </button>
+        <AuthButton />
       </div>
     </header>
   );

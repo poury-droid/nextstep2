@@ -113,13 +113,20 @@ export const HomeCalendar: React.FC<HomeCalendarProps> = ({
 
     tasks.forEach(t => {
       if (t.dueDate) {
+        // 할 일과 연결된 공고 찾기 (ID 우선, 없으면 회사명으로 보조 매칭)
+        const linkedApp =
+          (t.applicationId ? applications.find(a => a.id === t.applicationId) : undefined) ||
+          (t.applicationName ? applications.find(a => a.company === t.applicationName) : undefined);
         events.push({
           id: `task-${t.id}`,
           type: 'task',
           typeLabel: '할 일',
           date: t.dueDate,
           title: t.title,
-          subtitle: t.applicationName || '일반 할 일',
+          subtitle: linkedApp
+            ? `${linkedApp.company} · ${linkedApp.position}`
+            : t.applicationName || '일반 할 일',
+          appId: linkedApp?.id,
           badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
           dotColor: 'bg-emerald-500',
           completed: t.completed,
@@ -514,6 +521,7 @@ export const HomeCalendar: React.FC<HomeCalendarProps> = ({
 
                   <div className="mt-2">
                     {evt.type === 'task' ? (
+                      <>
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input
                           type="checkbox"
@@ -529,6 +537,20 @@ export const HomeCalendar: React.FC<HomeCalendarProps> = ({
                           {evt.title}
                         </span>
                       </label>
+                      {evt.appId ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelectApplication(evt.appId!)}
+                          className="mt-1.5 ml-5 inline-flex items-center gap-1 max-w-[calc(100%-1.25rem)] text-[11px] font-semibold text-slate-600 hover:text-blue-700 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-md px-2 py-0.5 transition-colors"
+                          title="연결된 공고 보기"
+                        >
+                          <IconBriefcase className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{evt.subtitle}</span>
+                        </button>
+                      ) : (
+                        <p className="mt-1 ml-5 text-[11px] text-slate-400">{evt.subtitle}</p>
+                      )}
+                      </>
                     ) : (
                       <>
                         <h5 className="text-xs sm:text-sm font-extrabold text-slate-900">

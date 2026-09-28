@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext.tsx';
+import { AuthProvider } from './context/AuthContext.tsx';
 import { Sidebar } from './components/Sidebar.tsx';
 import { Navbar } from './components/Navbar.tsx';
 import { DashboardPage } from './pages/DashboardPage.tsx';
@@ -34,7 +35,6 @@ const MainAppContent: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex">
       {/* Sidebar Navigation */}
       <Sidebar
-        onOpenNewAppModal={handleOpenNewAppModal}
         isMobileOpen={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
@@ -44,7 +44,6 @@ const MainAppContent: React.FC = () => {
         {/* Top Navbar */}
         <Navbar
           onToggleMobileMenu={() => setIsMobileSidebarOpen(prev => !prev)}
-          onOpenNewAppModal={handleOpenNewAppModal}
         />
 
         {/* Dynamic Page Views */}
@@ -98,8 +97,10 @@ const MainAppContent: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <MainAppContent />
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <MainAppContent />
+      </AppProvider>
+    </AuthProvider>
   );
 }

@@ -1,9 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext.tsx';
 import { DDayBadge } from '../components/DDayBadge.tsx';
 import { HomeCalendar } from '../components/HomeCalendar.tsx';
 import { OcrJobRegistrationModal } from '../components/OcrJobRegistrationModal.tsx';
-import { VISUAL_SAMPLES, VisualSampleDoc } from '../utils/samplePosters.ts';
 import { getDDay, getTodayString } from '../utils/date.ts';
 import {
   IconBriefcase,
@@ -19,8 +18,6 @@ import {
   IconCheck,
   IconX,
   IconScan,
-  IconSparkles,
-  IconUploadCloud,
 } from '../components/Icons.tsx';
 
 interface DashboardPageProps {
@@ -50,7 +47,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   const [editTaskDueDate, setEditTaskDueDate] = useState('');
 
   // OCR Fast Register state
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isOcrModalOpen, setIsOcrModalOpen] = useState(false);
   const [ocrInitialImageFile, setOcrInitialImageFile] = useState<File | null>(null);
   const [ocrInitialImageDataUrl, setOcrInitialImageDataUrl] = useState<string | null>(null);
@@ -65,12 +61,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
     setIsOcrModalOpen(true);
   };
 
-  const handleOpenOcrWithSample = (sample: VisualSampleDoc) => {
-    setOcrInitialImageFile(null);
-    setOcrInitialImageDataUrl(sample.previewDataUrl);
-    setOcrInitialFileName(sample.fileName);
-    setIsOcrModalOpen(true);
-  };
 
   const handleRegistered = (newAppId: string) => {
     const registeredApp = applications.find(a => a.id === newAppId);
@@ -190,19 +180,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
               <button
                 type="button"
-                onClick={() => {
-                  setOcrInitialImageFile(null);
-                  setOcrInitialImageDataUrl(null);
-                  setOcrInitialFileName(null);
-                  setIsOcrModalOpen(true);
-                }}
-                className="px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs sm:text-sm font-bold border border-white/20 transition-colors flex items-center gap-1.5 shrink-0"
-              >
-                <IconScan className="w-4 h-4 text-cyan-300" />
-                <span>공고문 AI 분석 등록</span>
-              </button>
-              <button
-                type="button"
                 onClick={() => onSelectApplication(nearestSchedule.app.id)}
                 className="px-4 py-2.5 rounded-xl bg-white text-blue-900 text-xs sm:text-sm font-bold shadow-xs hover:bg-blue-50 transition-colors shrink-0"
               >
@@ -310,9 +287,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 <IconScan className="w-3.5 h-3.5" />
                 공고문 / 안내문 AI 분석
               </span>
-              <span className="text-xs font-semibold text-blue-800">
-                AI 시각 분석
-              </span>
             </div>
 
             <div>
@@ -320,52 +294,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 공고문·안내문 일정 자동 등록
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                공고문 사진이나 텍스트를 올리면 주요 전형 일정을 자동으로 추출하여 등록합니다.
+                공고문 사진을 이 영역에 끌어다 놓거나 버튼을 눌러 올리면, 주요 전형 일정을 자동으로 추출해 등록합니다.
               </p>
-            </div>
-
-            {/* Quick Sample Chips for Instant 1-Click Testing */}
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              <span className="text-xs font-bold text-slate-500">샘플:</span>
-              {VISUAL_SAMPLES.filter(s => s.category === 'job_posting').slice(0, 3).map(sample => (
-                <button
-                  key={sample.id}
-                  type="button"
-                  onClick={() => handleOpenOcrWithSample(sample)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-white border border-blue-200 text-blue-800 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-2xs"
-                >
-                  <span>{sample.name.replace(' 채용 포스터', '')}</span>
-                  <IconSparkles className="w-3 h-3 opacity-70" />
-                </button>
-              ))}
             </div>
           </div>
 
-          {/* Action Buttons & Hidden File Input */}
-          <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end gap-2 shrink-0">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={e => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  handleOpenOcrWithFile(file);
-                }
-                if (e.target) e.target.value = '';
-              }}
-              className="hidden"
-            />
-
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-black shadow-md shadow-blue-500/25 transition-all cursor-pointer"
-            >
-              <IconScan className="w-4 h-4" />
-              <span>공고문 사진 올려서 등록</span>
-            </button>
-
+          {/* Single entry point: opens the analyzer (upload / paste / drag & drop inside) */}
+          <div className="shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -374,10 +309,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                 setOcrInitialFileName(null);
                 setIsOcrModalOpen(true);
               }}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold transition-all shadow-2xs"
+              className="w-full lg:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-black shadow-md shadow-blue-500/25 transition-all"
             >
-              <IconUploadCloud className="w-3.5 h-3.5 text-blue-600" />
-              <span>공고문 / 안내문 분석창 열기</span>
+              <IconScan className="w-4 h-4" />
+              <span>공고문 분석하기</span>
             </button>
           </div>
         </div>
