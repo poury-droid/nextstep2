@@ -94,7 +94,14 @@ export interface StudyPlan {
   targetScoreOrRank?: string;
   weekdayHours: number;
   weekendHours: number;
-  subjects: { name: string; importance: number; currentLevel: string }[];
+  subjects: {
+    name: string;
+    importance: number;
+    currentLevel: string;
+    /** 단계별 분량 (예: 기출 5회, 개념 12강) */
+    amounts?: Partial<Record<'개념' | '기출' | '실전', { total: number; unit: string }>>;
+  }[];
+  stages?: ('개념' | '기출' | '실전')[]; // 진행할 학습 단계 (없으면 전체)
   availableDays: number[]; // 0 for Sun, 1 for Mon...
   excludedDates: string[];
   days: StudyDay[];

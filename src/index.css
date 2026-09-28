@@ -4,7 +4,48 @@
 
 @layer base {
   body {
-    font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+    font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
     letter-spacing: -0.015em;
+  }
+}
+
+/* Tailwind v4 의 outline-hidden 대응 (v3 에는 없음) */
+@layer utilities {
+  .outline-hidden {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+}
+
+/* ── 파스텔 테마 배경 · 디테일 ─────────────────────────────── */
+@layer base {
+  body {
+    background-color: #f6f3ff;
+    background-image:
+      radial-gradient(900px 500px at 0% 0%, rgb(216 206 255 / 0.55), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, rgb(166 235 216 / 0.40), transparent 60%),
+      radial-gradient(900px 600px at 50% 100%, rgb(255 214 232 / 0.35), transparent 60%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: rgb(187 169 255 / 0.45);
+  }
+
+  /* 스크롤바 */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbc6de transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: #d8ceff;
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
   }
 }

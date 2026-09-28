@@ -2,6 +2,42 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { GoogleGenAI, Type } from '@google/genai';
 
+
+/**
+ * 문서 종류 판별 (채용 공고 / 자격·어학 성적표 / 수험표)
+ * 채용 공고에도 "OPIc IM1 이상", "공인 어학 성적표 제출" 같은 문구가 들어가므로
+ * 단어 하나로 판단하지 않고, 문서 성격을 나타내는 신호를 점수로 비교한다.
+ */
+function classifyDocument(text: string): 'job_posting' | 'certificate' | 'exam_ticket' {
+  const t = (text || '').toLowerCase();
+  const count = (patterns: RegExp[]) => patterns.reduce((n, re) => n + (re.test(t) ? 1 : 0), 0);
+
+  const jobScore = count([
+    /채용|공채|신입사원|경력사원|recruit/,
+    /모집\s*(직무|부문|분야|요강)|모집 기간/,
+    /서류\s*(접수|전형|마감)|접수\s*(기간|마감)/,
+    /지원\s*(자격|서|방법|기간)|입사\s*지원/,
+    /전형\s*(일정|절차)|면접\s*전형|직무\s*면접|임원\s*면접/,
+    /코딩\s*테스트|sw\s*역량|gsat|인적성|softeer|소프티어/,
+    /근무지|우대\s*(사항|역량)|담당\s*업무/,
+  ]);
+
+  const certScore = count([
+    /score\s*report|성적\s*(표|증명서|인증서)\s*$/m,
+    /수험자\s*(성명|명)|candidate/,
+    /취득\s*(등급|점수|일)|proficiency\s*rating|자격\s*번호|인증\s*번호|report\s*no/,
+    /유효\s*기간|validity/,
+    /발급\s*(기관|일)|시행\s*\/?\s*주관\s*기관/,
+    /평가\s*일자|test\s*date|합격\s*일자/,
+  ]);
+
+  const ticketScore = count([/수험표/, /수험\s*번호/, /입실|시험장|고사장/, /준비물/]);
+
+  if (ticketScore >= 2 && ticketScore >= jobScore) return 'exam_ticket';
+  if (certScore >= 2 && certScore > jobScore) return 'certificate';
+  return 'job_posting';
+}
+
 const app = express();
 const PORT = 3000;
 
@@ -459,7 +495,13 @@ app.post('/api/ocr-analyze', async (req: Request, res: Response) => {
 6. expiryDate (유효기간 만료일자, YYYY-MM-DD):
    - 예: '2026.08.15 ~ 2028.08.14'라면 '2028-08-14'
 7. 연도가 생략된 경우: 문서 본문의 연도(예: 2026년 하반기) 또는 올해(${todayStr.slice(0, 4)}년)를 적용하여 반드시 YYYY-MM-DD 형태로 변환하세요.
-8. 본문에 명시되지 않은 날짜는 빈 문자열("")로 반환하세요.`;
+8. 본문에 명시되지 않은 날짜는 빈 문자열("")로 반환하세요.
+
+[문서 종류(documentType) 판별 규칙]
+- job_posting: 채용 공고. 모집 직무, 서류 접수, 전형 일정, 지원 자격이 있으면 채용 공고입니다.
+  지원 자격에 'OPIc IM1 이상', '공인 어학 성적표 제출', '정보처리기사 우대' 같은 문구가 있어도 채용 공고입니다.
+- certificate: 개인이 취득한 자격증 · 어학 성적표 자체 (수험자 성명, 취득 등급/점수, 인증 번호, 유효기간이 있는 문서).
+- exam_ticket: 수험표 (수험 번호, 입실 시간, 시험장 안내).`;
 
     let effectiveText = (req.body.text || '').trim();
     const isSvg = (mimeType && mimeType.includes('svg')) || (fileBase64 && fileBase64.includes('data:image/svg'));
@@ -568,6 +610,13 @@ app.post('/api/ocr-analyze', async (req: Request, res: Response) => {
               parsed.expiryDate = docDates.expiryDate;
             }
 
+            // AI 가 채용 공고를 자격증으로 잘못 분류한 경우 보정
+            const ruleType = classifyDocument(`${parsed.ocrRawText || ''}\n${effectiveText || ''}`);
+            if (parsed.documentType === 'certificate' && ruleType === 'job_posting') {
+              parsed.documentType = 'job_posting';
+              parsed.documentTypeLabel = '채용 공고';
+            }
+
             const lineCount = (parsed.ocrRawText || '').split('\n').filter((l: string) => l.trim()).length || 1;
             const wordCount = (parsed.ocrRawText || '').split(/\s+/).filter((w: string) => w.trim()).length || 1;
 
@@ -597,8 +646,16 @@ app.post('/api/ocr-analyze', async (req: Request, res: Response) => {
 
     // Heuristic High-Precision Fallback OCR
     const rawHint = (effectiveText || fileName || '채용공고 포스터').toLowerCase();
-    const isCert = /opic|toeic|자격증|기사|성적|토익|오픽/i.test(rawHint);
-    const isExamTicket = /수험표|수험번호|시험장/i.test(rawHint);
+    // 본문이 없으면 파일 이름으로만 추정 (예: opic_score.png)
+    const hintType = effectiveText
+      ? classifyDocument(effectiveText)
+      : /score|성적표|자격증|certificate/i.test(rawHint)
+        ? 'certificate'
+        : /수험표|ticket/i.test(rawHint)
+          ? 'exam_ticket'
+          : 'job_posting';
+    const isCert = hintType === 'certificate';
+    const isExamTicket = hintType === 'exam_ticket';
 
     let docType: 'job_posting' | 'certificate' | 'exam_ticket' | 'other' = 'job_posting';
     let docTypeLabel = '채용 공고';

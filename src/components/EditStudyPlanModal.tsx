@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { StudyPlan, Application } from '../types/index.ts';
 import { IconX, IconEdit3, IconSparkles, IconPlus, IconTrash2, IconAlertCircle } from './Icons.tsx';
+import {
+  normalizeLevel,
+  normalizeStages,
+  toPlanSubject,
+  type SkillLevel,
+  type StudyStage,
+  type SubjectAmounts,
+} from '../utils/studyScheduler.ts';
+import { SubjectLevelPicker, StudyStagePicker, parseSubjectNames } from './SubjectLevelPicker.tsx';
+
+const levelsFromPlan = (plan: StudyPlan): Record<string, SkillLevel> =>
+  Object.fromEntries(plan.subjects.map(s => [s.name, normalizeLevel(s.currentLevel)]));
+
+const amountsFromPlan = (plan: StudyPlan): Record<string, SubjectAmounts> =>
+  Object.fromEntries(plan.subjects.filter(s => s.amounts).map(s => [s.name, s.amounts as SubjectAmounts]));
 
 interface EditStudyPlanModalProps {
   isOpen: boolean;
@@ -26,6 +41,9 @@ export const EditStudyPlanModal: React.FC<EditStudyPlanModalProps> = ({
   const [subjectsText, setSubjectsText] = useState(
     plan.subjects.map(s => s.name).join(', ')
   );
+  const [subjectLevels, setSubjectLevels] = useState<Record<string, SkillLevel>>(() => levelsFromPlan(plan));
+  const [studyStages, setStudyStages] = useState<StudyStage[]>(() => normalizeStages(plan.stages));
+  const [subjectAmounts, setSubjectAmounts] = useState<Record<string, SubjectAmounts>>(() => amountsFromPlan(plan));
   const [regenerateSchedule, setRegenerateSchedule] = useState(false);
 
   useEffect(() => {
@@ -37,6 +55,9 @@ export const EditStudyPlanModal: React.FC<EditStudyPlanModalProps> = ({
       setWeekdayHours(plan.weekdayHours || 4);
       setWeekendHours(plan.weekendHours || 7);
       setSubjectsText(plan.subjects.map(s => s.name).join(', '));
+      setSubjectLevels(levelsFromPlan(plan));
+      setStudyStages(normalizeStages(plan.stages));
+      setSubjectAmounts(amountsFromPlan(plan));
       setRegenerateSchedule(false);
     }
   }, [isOpen, plan]);
@@ -47,18 +68,17 @@ export const EditStudyPlanModal: React.FC<EditStudyPlanModalProps> = ({
     e.preventDefault();
     if (!examName.trim()) return;
 
-    const subjectsList = subjectsText
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean)
-      .map((name, idx) => {
-        const existing = plan.subjects.find(s => s.name.toLowerCase() === name.toLowerCase());
-        return {
-          name,
-          importance: existing ? existing.importance : (5 - idx > 1 ? 5 - idx : 2),
-          currentLevel: existing ? existing.currentLevel : '중급',
-        };
-      });
+    const subjectsList = parseSubjectNames(subjectsText).map(name =>
+      toPlanSubject(
+        name,
+        subjectLevels[name] || '보통',
+        subjectAmounts[name]
+          ? (Object.fromEntries(
+              Object.entries(subjectAmounts[name]).filter(([k]) => studyStages.includes(k as StudyStage)),
+            ) as SubjectAmounts)
+          : undefined,
+      ),
+    );
 
     onSave(
       {
@@ -69,6 +89,7 @@ export const EditStudyPlanModal: React.FC<EditStudyPlanModalProps> = ({
         weekdayHours,
         weekendHours,
         subjects: subjectsList.length > 0 ? subjectsList : plan.subjects,
+        stages: studyStages,
       },
       regenerateSchedule
     );
@@ -197,10 +218,28 @@ export const EditStudyPlanModal: React.FC<EditStudyPlanModalProps> = ({
               placeholder="예: 알고리즘, CS 운영체제, SQL"
               className="w-full text-xs px-3.5 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
-            <p className="text-[11px] text-slate-400 mt-1">
-              과목 순서에 따라 중요도가 자동 분배됩니다.
-            </p>
           </div>
+
+
+          <StudyStagePicker
+            value={studyStages}
+            onChange={stages => {
+              setStudyStages(stages);
+              setRegenerateSchedule(true); // 단계를 바꾸면 일정도 다시 만들어야 의미가 있음
+            }}
+          />
+
+          <SubjectLevelPicker
+            names={parseSubjectNames(subjectsText)}
+            levels={subjectLevels}
+            onChange={setSubjectLevels}
+            stages={studyStages}
+            amounts={subjectAmounts}
+            onAmountsChange={amounts => {
+              setSubjectAmounts(amounts);
+              setRegenerateSchedule(true); // 분량을 바꾸면 일정도 다시 만들어야 반영됨
+            }}
+          />
 
           {/* Option to regenerate schedule */}
           <div className="p-3.5 rounded-xl border border-purple-100 bg-purple-50/50 space-y-1.5">
@@ -217,8 +256,8 @@ export const EditStudyPlanModal: React.FC<EditStudyPlanModalProps> = ({
                   스케줄 전체 자동 재분배 (일정 다시 생성)
                 </span>
                 <p className="text-purple-700/80 text-[11px] mt-0.5 leading-relaxed">
-                  체크 시 변경된 과목과 공부 시간에 맞춰 일자별 과제 블록을 새로 다시 자동 편성합니다.
-                  (체크를 해제하면 기존 작성한 일자별 블록이 유지됩니다)
+                  체크하면 과목별 실력, 공부 시간, 시험일에 맞춰 시험 전날까지 일정을 새로 만듭니다.
+                  (체크하지 않으면 지금 일정이 그대로 유지됩니다)
                 </p>
               </div>
             </label>

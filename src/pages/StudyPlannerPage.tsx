@@ -15,54 +15,22 @@ import {
   IconX,
   IconCalendar,
 } from '../components/Icons.tsx';
+import {
+  generateStudySchedule,
+  normalizeLevel,
+  subjectShares,
+  toPlanSubject,
+  SKILL_STYLE,
+  DEFAULT_STAGES,
+  normalizeStages,
+  STUDY_STAGES,
+  formatAmounts,
+  type SkillLevel,
+  type StudyStage,
+  type SubjectAmounts,
+} from '../utils/studyScheduler.ts';
+import { SubjectLevelPicker, StudyStagePicker, parseSubjectNames } from '../components/SubjectLevelPicker.tsx';
 
-const TOPIC_PRESETS = [
-  '기본 이론 및 핵심 개념 집중 정립',
-  '최신 기출 빈출 유형 분석 및 문제 풀이',
-  '고난도 변형 및 실전 응용 풀이 훈련',
-  '취약 단원 개념 점검 및 오답 노트 정리',
-  '제한시간 타이머 실전 모의고사 풀이',
-  '핵심 공식/용어 키워드 백지 복습',
-  '전 영역 총정리 및 빈출 패턴 최종 점검',
-  '시험 전날 최종 요약 암기 및 컨디션 관리',
-];
-
-function generateSmartStudyDays(
-  subjects: { name: string; importance: number }[],
-  daysCount: number = 7
-): StudyDay[] {
-  return Array.from({ length: daysCount }).map((_, idx) => {
-    const dateStr = idx === 0 ? getTodayString() : getFutureDateString(idx);
-    const dDayInfo = getDDay(dateStr);
-    const dayOfWeek = idx === 0 ? '오늘' : (dDayInfo.text !== '-' ? dDayInfo.text : `Day ${idx + 1}`);
-
-    const sub1 = subjects[idx % subjects.length]?.name || '핵심 과목';
-    const sub2 = subjects[(idx + 1) % subjects.length]?.name || '실전 연습';
-    const topic1 = TOPIC_PRESETS[(idx * 2) % TOPIC_PRESETS.length];
-    const topic2 = TOPIC_PRESETS[(idx * 2 + 1) % TOPIC_PRESETS.length];
-
-    return {
-      date: dateStr,
-      dayOfWeek,
-      blocks: [
-        {
-          id: `b-${Date.now()}-${idx}-1`,
-          subject: sub1,
-          topic: topic1,
-          hours: 2,
-          completed: false,
-        },
-        {
-          id: `b-${Date.now()}-${idx}-2`,
-          subject: sub2,
-          topic: topic2,
-          hours: 2,
-          completed: false,
-        },
-      ],
-    };
-  });
-}
 
 export const StudyPlannerPage: React.FC = () => {
   const {
@@ -92,6 +60,10 @@ export const StudyPlannerPage: React.FC = () => {
   const [weekdayHours, setWeekdayHours] = useState(4);
   const [weekendHours, setWeekendHours] = useState(7);
   const [subjectsText, setSubjectsText] = useState('자료구조/알고리즘, 운영체제/네트워크, 데이터베이스/SQL');
+  const [subjectLevels, setSubjectLevels] = useState<Record<string, SkillLevel>>({});
+  const [studyStages, setStudyStages] = useState<StudyStage[]>(DEFAULT_STAGES);
+  const [subjectAmounts, setSubjectAmounts] = useState<Record<string, SubjectAmounts>>({});
+  const newPlanSubjectNames = parseSubjectNames(subjectsText);
 
   // Block editing state
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
@@ -119,17 +91,21 @@ export const StudyPlannerPage: React.FC = () => {
     e.preventDefault();
     if (!examName.trim()) return;
 
-    const subjectsList = subjectsText
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean)
-      .map((name, idx) => ({
-        name,
-        importance: 5 - idx > 1 ? 5 - idx : 2,
-        currentLevel: '중급',
-      }));
+    // 선택하지 않은 단계의 분량은 저장하지 않음
+    const pickAmounts = (a?: SubjectAmounts): SubjectAmounts | undefined =>
+      a ? (Object.fromEntries(Object.entries(a).filter(([k]) => studyStages.includes(k as StudyStage))) as SubjectAmounts) : undefined;
+    const subjectsList = newPlanSubjectNames.map(name =>
+      toPlanSubject(name, subjectLevels[name] || '보통', pickAmounts(subjectAmounts[name])),
+    );
+    if (subjectsList.length === 0) return;
 
-    const generatedDays = generateSmartStudyDays(subjectsList, 7);
+    const generatedDays = generateStudySchedule({
+      subjects: subjectsList,
+      examDate,
+      weekdayHours,
+      weekendHours,
+      stages: studyStages,
+    });
 
     addStudyPlan({
       applicationId: selectedAppId || undefined,
@@ -139,6 +115,7 @@ export const StudyPlannerPage: React.FC = () => {
       weekdayHours,
       weekendHours,
       subjects: subjectsList,
+      stages: studyStages,
       availableDays: [1, 2, 3, 4, 5, 6, 0],
       excludedDates: [],
       days: generatedDays,
@@ -146,14 +123,25 @@ export const StudyPlannerPage: React.FC = () => {
 
     setShowNewPlanModal(false);
     setExamName('');
+    setSubjectLevels({});
+    setStudyStages(DEFAULT_STAGES);
+    setSubjectAmounts({});
   };
 
   const handleSavePlanSettings = (updates: Partial<StudyPlan>, regenerateSchedule?: boolean) => {
     if (!currentPlan) return;
 
     if (regenerateSchedule) {
-      const targetSubjects = updates.subjects || currentPlan.subjects;
-      const newDays = generateSmartStudyDays(targetSubjects, 7);
+      const merged = { ...currentPlan, ...updates };
+      const newDays = generateStudySchedule({
+        subjects: merged.subjects,
+        examDate: merged.examDate,
+        weekdayHours: merged.weekdayHours,
+        weekendHours: merged.weekendHours,
+        stages: merged.stages,
+        availableDays: merged.availableDays,
+        excludedDates: merged.excludedDates,
+      });
       updateStudyPlan(currentPlan.id, {
         ...updates,
         days: newDays,
@@ -209,10 +197,18 @@ export const StudyPlannerPage: React.FC = () => {
     if (!currentPlan) return;
     if (
       window.confirm(
-        `[${currentPlan.examName}]의 등록 과목에 맞춰 일자별 과제를 새로 자동 재분배하시겠습니까?\n(기존 입력된 과제 블록이 새로 갱신됩니다)`
+        `[${currentPlan.examName}] 일정을 과목별 실력과 공부 가능 시간에 맞춰 시험일까지 다시 만드시겠습니까?\n(직접 수정한 과제와 완료 체크는 초기화됩니다)`
       )
     ) {
-      const refreshedDays = generateSmartStudyDays(currentPlan.subjects, 7);
+      const refreshedDays = generateStudySchedule({
+        subjects: currentPlan.subjects,
+        examDate: currentPlan.examDate,
+        weekdayHours: currentPlan.weekdayHours,
+        weekendHours: currentPlan.weekendHours,
+        stages: currentPlan.stages,
+        availableDays: currentPlan.availableDays,
+        excludedDates: currentPlan.excludedDates,
+      });
       updateStudyPlan(currentPlan.id, { days: refreshedDays });
     }
   };
@@ -227,7 +223,7 @@ export const StudyPlannerPage: React.FC = () => {
             시험 대비 데일리 공부 플래너
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            목표 시험일까지의 자동 생성된 계획을 자유롭게 수정, 추가, 재분배할 수 있습니다.
+            과목별 실력에 맞춰 시험일까지 자동으로 만든 계획을 자유롭게 수정하고 추가할 수 있습니다.
           </p>
         </div>
 
@@ -338,25 +334,45 @@ export const StudyPlannerPage: React.FC = () => {
             {/* Subjects Chips & Quick Action */}
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs font-bold text-slate-400 mr-1">학습 단계:</span>
+                <span className="text-xs font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-2 py-1 rounded-lg mr-2">
+                  {normalizeStages(currentPlan.stages)
+                    .map(id => STUDY_STAGES.find(s => s.id === id)?.label)
+                    .join(' → ')}
+                  {' → 총정리'}
+                </span>
                 <span className="text-xs font-bold text-slate-400 mr-1">대비 과목:</span>
-                {currentPlan.subjects.map((sub, idx) => (
-                  <span
-                    key={idx}
-                    className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-medium"
-                  >
-                    {sub.name} (중요도: {'★'.repeat(sub.importance)})
-                  </span>
-                ))}
+                {(() => {
+                  const shares = subjectShares(currentPlan.subjects);
+                  return currentPlan.subjects.map((sub, idx) => {
+                    const level = normalizeLevel(sub.currentLevel);
+                    return (
+                      <span
+                        key={idx}
+                        className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-medium"
+                      >
+                        {sub.name}
+                        <span className={`text-[10px] font-bold px-1.5 py-px rounded border ${SKILL_STYLE[level]}`}>
+                          {level}
+                        </span>
+                        <span className="text-[10px] text-slate-500">{shares[sub.name]}%</span>
+                        {sub.amounts && (
+                          <span className="text-[10px] text-purple-700">{formatAmounts(sub.amounts)}</span>
+                        )}
+                      </span>
+                    );
+                  });
+                })()}
               </div>
 
               <button
                 type="button"
                 onClick={handleRegenerateEntireSchedule}
                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 hover:text-purple-900 bg-purple-50/60 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200/60 transition-colors"
-                title="과목 기준 스케줄 다시 자동 분배"
+                title="과목별 실력과 공부 시간에 맞춰 시험일까지 일정 다시 만들기"
               >
                 <IconSparkles className="w-3.5 h-3.5 text-purple-600" />
-                스케줄 자동 재분배
+                일정 다시 만들기
               </button>
             </div>
           </div>
@@ -753,7 +769,7 @@ export const StudyPlannerPage: React.FC = () => {
       {/* Create New Plan Modal */}
       {showNewPlanModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                 <IconSparkles className="w-4 h-4 text-purple-600" />
@@ -857,6 +873,17 @@ export const StudyPlannerPage: React.FC = () => {
                 />
               </div>
 
+              <StudyStagePicker value={studyStages} onChange={setStudyStages} />
+
+              <SubjectLevelPicker
+                names={newPlanSubjectNames}
+                levels={subjectLevels}
+                onChange={setSubjectLevels}
+                stages={studyStages}
+                amounts={subjectAmounts}
+                onAmountsChange={setSubjectAmounts}
+              />
+
               <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
                 <button
                   type="button"
@@ -869,7 +896,7 @@ export const StudyPlannerPage: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 text-xs font-semibold text-white bg-purple-600 rounded-xl hover:bg-purple-700 shadow-xs"
                 >
-                  스케줄 자동 분배 생성
+                  시험일까지 계획 만들기
                 </button>
               </div>
             </form>

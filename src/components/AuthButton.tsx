@@ -21,8 +21,13 @@ const SYNC_LABEL: Record<SyncStatus, { label: string; className: string; dot: st
   error: { label: '동기화 오류', className: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
 };
 
-export const SyncStatusBadge: React.FC<{ className?: string }> = ({ className = '' }) => {
+export const SyncStatusBadge: React.FC<{ className?: string; onlyOnError?: boolean }> = ({
+  className = '',
+  onlyOnError = false,
+}) => {
   const { syncStatus, syncError } = useApp();
+  // onlyOnError: 평소에는 숨기고 동기화 오류가 났을 때만 표시
+  if (onlyOnError && syncStatus !== 'error') return null;
   const info = SYNC_LABEL[syncStatus];
   return (
     <span

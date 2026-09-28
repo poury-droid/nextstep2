@@ -25,7 +25,149 @@ import {
   IconColumns,
   IconRotateCw,
   IconImage,
+  IconEdit3,
 } from '../components/Icons.tsx';
+
+const FIELD_CLASS =
+  'w-full text-xs sm:text-sm px-3 py-2 border border-slate-200 rounded-xl bg-white text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-hidden';
+
+const DOC_TYPES: { id: OcrAnalysisResult['documentType']; label: string }[] = [
+  { id: 'job_posting', label: '채용 공고' },
+  { id: 'exam_ticket', label: '수험표 · 안내문' },
+  { id: 'certificate', label: '자격증 · 어학' },
+];
+
+type ScheduleKey = 'deadline' | 'writtenTestDate' | 'interviewDate' | 'replyDeadline';
+const SCHEDULE_FIELDS: { key: ScheduleKey; label: string; border: string; text: string; dot: string }[] = [
+  { key: 'deadline', label: '서류 마감', border: 'border-rose-200', text: 'text-rose-700', dot: 'bg-rose-500' },
+  { key: 'writtenTestDate', label: '필기 / 코테', border: 'border-indigo-200', text: 'text-indigo-700', dot: 'bg-indigo-500' },
+  { key: 'interviewDate', label: '면접', border: 'border-purple-200', text: 'text-purple-700', dot: 'bg-purple-500' },
+  { key: 'replyDeadline', label: '발표 / 회신', border: 'border-amber-200', text: 'text-amber-700', dot: 'bg-amber-500' },
+];
+
+/** 항목 추가(Enter/추가 버튼) · 삭제(×) · 클릭해서 수정 가능한 태그 목록 */
+const EditableChipList: React.FC<{
+  label: string;
+  items: string[];
+  placeholder: string;
+  chipClass: string;
+  onChange: (items: string[]) => void;
+}> = ({ label, items, placeholder, chipClass, onChange }) => {
+  const [draft, setDraft] = useState('');
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
+
+  const add = () => {
+    const value = draft.trim();
+    if (!value) return;
+    if (!items.includes(value)) onChange([...items, value]);
+    setDraft('');
+  };
+  const commitEdit = () => {
+    if (editingIdx === null) return;
+    const value = editText.trim();
+    const next = [...items];
+    if (value) next[editingIdx] = value;
+    else next.splice(editingIdx, 1);
+    onChange(next);
+    setEditingIdx(null);
+  };
+
+  return (
+    <div>
+      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+        {label} <span className="font-normal text-slate-400">· 눌러서 수정, ×로 삭제</span>
+      </label>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((item, idx) =>
+          editingIdx === idx ? (
+            <input
+              key={idx}
+              autoFocus
+              value={editText}
+              onChange={e => setEditText(e.target.value)}
+              onBlur={commitEdit}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commitEdit();
+                }
+                if (e.key === 'Escape') setEditingIdx(null);
+              }}
+              className="px-2.5 py-1 text-xs border border-blue-400 rounded-lg focus:outline-hidden min-w-[120px]"
+            />
+          ) : (
+            <span key={idx} className={`inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-lg border text-xs font-semibold ${chipClass}`}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingIdx(idx);
+                  setEditText(item);
+                }}
+                className="text-left"
+                title="눌러서 수정"
+              >
+                {item}
+              </button>
+              <button
+                type="button"
+                onClick={() => onChange(items.filter((_, i) => i !== idx))}
+                className="w-4 h-4 rounded flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-white/70"
+                aria-label={`${item} 삭제`}
+              >
+                ×
+              </button>
+            </span>
+          ),
+        )}
+        {items.length === 0 && <span className="text-[11px] text-slate-400 py-1">아직 없어요</span>}
+      </div>
+      <div className="flex gap-1.5 mt-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              add();
+            }
+          }}
+          placeholder={placeholder}
+          className="flex-1 min-w-0 text-xs px-3 py-1.5 border border-slate-200 rounded-lg bg-white focus:border-blue-500 focus:outline-hidden"
+        />
+        <button
+          type="button"
+          onClick={add}
+          className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700"
+        >
+          추가
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/** 처음부터 직접 입력할 때 쓰는 빈 양식 */
+const EMPTY_FORM: Partial<OcrAnalysisResult> = {
+  documentType: 'job_posting',
+  documentTypeLabel: '채용 공고',
+  company: '',
+  position: '',
+  title: '',
+  deadline: '',
+  writtenTestDate: '',
+  interviewDate: '',
+  replyDeadline: '',
+  location: '',
+  scoreOrGrade: '',
+  issuer: '',
+  issueDate: '',
+  expiryDate: '',
+  subjects: [],
+  requiredDocuments: [],
+  memo: '',
+};
 
 export const DocumentAnalyzerPage: React.FC = () => {
   const { addApplication, addCredential, setCurrentTab, applications, updateApplication, selectedAppId, setSelectedAppId } = useApp();
@@ -101,6 +243,8 @@ export const DocumentAnalyzerPage: React.FC = () => {
     memo: '서류 접수 마감: 9월 22일(화) 18:00. 소프티어 코딩테스트는 10월 3일(토) 진행되며 면제 자격(레벨 3) 보유 여부를 사전에 확인하세요.',
     analysisSummary: '공고 포스터의 전형 일정(서류 마감 9/22, 코딩테스트 10/3, 직무면접 10/20)을 정확하게 추출했습니다.',
   });
+
+  const isCertDoc = ocrData.documentType === 'certificate';
 
   // Call the dedicated OCR & AI analysis API endpoint
   const executeOcrAnalysis = async (payload: {
@@ -349,7 +493,7 @@ export const DocumentAnalyzerPage: React.FC = () => {
       grade: ocrData.scoreOrGrade || '취득',
       issuer: ocrData.issuer || ocrData.company || '공식 인증 기관',
       acquiredDate: ocrData.issueDate || new Date().toISOString().split('T')[0],
-      expiresAt: ocrData.expiryDate || getFutureDateString(730),
+      expiresAt: ocrData.expiryDate || undefined, // 비워 두면 유효기간 없음 (예: 기사 자격증)
       imageUrl: previewImage || undefined,
       memo: ocrData.memo || 'OCR 자동 인식으로 등록된 자격/어학 정보',
     });
@@ -629,9 +773,21 @@ export const DocumentAnalyzerPage: React.FC = () => {
                   </h3>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {ocrData.documentTypeLabel} · 내용을 확인하고 필요하면 고친 뒤 저장하세요.
+                  AI가 읽은 내용이에요. 틀린 부분은 모두 직접 고칠 수 있어요.
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('분석 결과를 모두 지우고 빈 양식에 직접 입력할까요?')) {
+                    setOcrData(prev => ({ ...prev, ...EMPTY_FORM } as OcrAnalysisResult));
+                  }
+                }}
+                className="self-start sm:self-center inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 shrink-0"
+              >
+                <IconEdit3 className="w-3.5 h-3.5" />
+                비우고 직접 입력
+              </button>
             </div>
 
             {/* Loading Scanner Animation */}
@@ -651,151 +807,166 @@ export const DocumentAnalyzerPage: React.FC = () => {
                 {/* Result Tab 1: Structured AI Analysis */}
                 {(
                   <div className="space-y-4">
+                    {/* 문서 종류: AI 가 잘못 분류했을 때 직접 바꿀 수 있음 */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold text-slate-600">문서 종류</span>
+                      <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+                        {DOC_TYPES.map(dt => (
+                          <button
+                            key={dt.id}
+                            type="button"
+                            onClick={() => setOcrData({ ...ocrData, documentType: dt.id, documentTypeLabel: dt.label })}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-md transition-colors ${
+                              ocrData.documentType === dt.id ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                            }`}
+                          >
+                            {dt.label}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-[11px] text-slate-400">AI가 잘못 골랐으면 바꿔 주세요</span>
+                    </div>
+
                     {/* Company & Position */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1">
-                          {ocrData.documentType === 'certificate' ? '발급/주관 기관' : '기업 / 회사명'}
+                          {isCertDoc ? '발급/주관 기관' : '기업 / 회사명'}
                         </label>
                         <input
                           type="text"
                           value={ocrData.company}
                           onChange={e => setOcrData({ ...ocrData, company: e.target.value })}
-                          className="w-full text-sm font-extrabold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-900"
+                          placeholder={isCertDoc ? '예: ETS, 한국산업인력공단' : '예: 삼성전자'}
+                          className={FIELD_CLASS + ' font-bold'}
                         />
                       </div>
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1">
-                          {ocrData.documentType === 'certificate' ? '자격/어학 시험명' : '모집 직무 / 부문'}
+                          {isCertDoc ? '자격/어학 시험명' : '모집 직무 / 부문'}
                         </label>
                         <input
                           type="text"
                           value={ocrData.position}
                           onChange={e => setOcrData({ ...ocrData, position: e.target.value })}
-                          className="w-full text-sm font-extrabold px-3.5 py-2.5 border border-slate-200 rounded-xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-900"
+                          placeholder={isCertDoc ? '예: TOEIC, 정보처리기사' : '예: SW 개발'}
+                          className={FIELD_CLASS + ' font-bold'}
                         />
                       </div>
                     </div>
 
-                    {/* Key Schedules extracted via OCR */}
-                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                          <IconCalendar className="w-3.5 h-3.5 text-blue-600" />
-                          주요 전형 일정
-                        </span>
+                    {!isCertDoc && (
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">공고 제목</label>
+                        <input
+                          type="text"
+                          value={ocrData.title}
+                          onChange={e => setOcrData({ ...ocrData, title: e.target.value })}
+                          placeholder="예: 2026 하반기 신입사원 공개채용"
+                          className={FIELD_CLASS}
+                        />
                       </div>
+                    )}
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="bg-white p-3 rounded-xl border border-rose-200 shadow-2xs">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] font-bold text-rose-700">서류 접수 마감</span>
-                            <span className="w-2 h-2 rounded-full bg-rose-500" />
-                          </div>
-                          <input
-                            type="date"
-                            value={ocrData.deadline}
-                            onChange={e => setOcrData({ ...ocrData, deadline: e.target.value })}
-                            className="w-full text-xs font-black text-slate-800 focus:outline-hidden"
-                          />
-                        </div>
-
-                        <div className="bg-white p-3 rounded-xl border border-indigo-200 shadow-2xs">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] font-bold text-indigo-700">필기 / 코딩테스트</span>
-                            <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                          </div>
-                          <input
-                            type="date"
-                            value={ocrData.writtenTestDate}
-                            onChange={e => setOcrData({ ...ocrData, writtenTestDate: e.target.value })}
-                            className="w-full text-xs font-black text-slate-800 focus:outline-hidden"
-                          />
-                        </div>
-
-                        <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] font-bold text-purple-700">면접 전형일</span>
-                            <span className="w-2 h-2 rounded-full bg-purple-500" />
-                          </div>
-                          <input
-                            type="date"
-                            value={ocrData.interviewDate}
-                            onChange={e => setOcrData({ ...ocrData, interviewDate: e.target.value })}
-                            className="w-full text-xs font-black text-slate-800 focus:outline-hidden"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Certificate Specific Info (if certificate) */}
-                    {ocrData.documentType === 'certificate' && (
-                      <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-2">
+                    {/* 자격증 정보 (자격증 · 어학일 때) */}
+                    {isCertDoc ? (
+                      <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-2.5">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
                           <IconAward className="w-4 h-4 text-amber-600" />
                           자격 및 성적 정보
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div className="bg-white p-2.5 rounded-lg border border-amber-200">
-                            <span className="text-[11px] text-slate-500 block">취득 등급 / 점수</span>
-                            <span className="text-sm font-black text-amber-800">
-                              {ocrData.scoreOrGrade || '취득 완료'}
-                            </span>
-                          </div>
-                          <div className="bg-white p-2.5 rounded-lg border border-amber-200">
-                            <span className="text-[11px] text-slate-500 block">취득/발급일</span>
-                            <span className="text-xs font-bold text-slate-800">
-                              {ocrData.issueDate || '2026-08-15'}
-                            </span>
-                          </div>
-                          <div className="bg-white p-2.5 rounded-lg border border-amber-200">
-                            <span className="text-[11px] text-slate-500 block">유효기간 만료일</span>
-                            <span className="text-xs font-bold text-rose-700">
-                              {ocrData.expiryDate || '2028-08-14 (2년)'}
-                            </span>
-                          </div>
+                          <label className="block">
+                            <span className="text-[11px] font-semibold text-slate-600 block mb-1">취득 등급 / 점수</span>
+                            <input
+                              type="text"
+                              value={ocrData.scoreOrGrade || ''}
+                              onChange={e => setOcrData({ ...ocrData, scoreOrGrade: e.target.value })}
+                              placeholder="예: 900점, IH, 합격"
+                              className={FIELD_CLASS}
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-[11px] font-semibold text-slate-600 block mb-1">취득 / 발급일</span>
+                            <input
+                              type="date"
+                              value={ocrData.issueDate || ''}
+                              onChange={e => setOcrData({ ...ocrData, issueDate: e.target.value })}
+                              className={FIELD_CLASS}
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-[11px] font-semibold text-slate-600 block mb-1">유효기간 만료일 (없으면 비움)</span>
+                            <input
+                              type="date"
+                              value={ocrData.expiryDate || ''}
+                              onChange={e => setOcrData({ ...ocrData, expiryDate: e.target.value })}
+                              className={FIELD_CLASS}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      /* 주요 전형 일정 */
+                      <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <IconCalendar className="w-3.5 h-3.5 text-blue-600" />
+                            주요 전형 일정
+                          </span>
+                          <span className="text-[11px] text-slate-400">해당 없는 일정은 비워 두세요</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                          {SCHEDULE_FIELDS.map(f => (
+                            <div key={f.key} className={`bg-white p-2.5 rounded-xl border ${f.border} shadow-2xs`}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={`text-[11px] font-bold ${f.text}`}>{f.label}</span>
+                                {ocrData[f.key] ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setOcrData({ ...ocrData, [f.key]: '' })}
+                                    className="text-[10px] text-slate-400 hover:text-rose-600"
+                                    title="날짜 지우기"
+                                  >
+                                    지우기
+                                  </button>
+                                ) : (
+                                  <span className={`w-2 h-2 rounded-full ${f.dot}`} />
+                                )}
+                              </div>
+                              <input
+                                type="date"
+                                value={(ocrData[f.key] as string) || ''}
+                                onChange={e => setOcrData({ ...ocrData, [f.key]: e.target.value })}
+                                className="w-full text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden"
+                              />
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
 
-                    {/* Subjects & Competencies */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        평가 과목 및 역량
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {ocrData.subjects.map((subj, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs font-semibold"
-                          >
-                            <IconBookOpen className="w-3.5 h-3.5 text-indigo-500" />
-                            {subj}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                    {!isCertDoc && (
+                      <>
+                        <EditableChipList
+                          label="평가 과목 및 역량"
+                          items={ocrData.subjects}
+                          placeholder="과목 입력 후 Enter (예: 알고리즘)"
+                          chipClass="bg-indigo-50 border-indigo-100 text-indigo-800"
+                          onChange={subjects => setOcrData({ ...ocrData, subjects })}
+                        />
+                        <EditableChipList
+                          label="제출 필요 서류"
+                          items={ocrData.requiredDocuments}
+                          placeholder="서류 입력 후 Enter (예: 성적증명서)"
+                          chipClass="bg-slate-100 border-slate-200 text-slate-700"
+                          onChange={requiredDocuments => setOcrData({ ...ocrData, requiredDocuments })}
+                        />
+                      </>
+                    )}
 
-                    {/* Required Documents */}
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        제출 필요 서류
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {ocrData.requiredDocuments.map((doc, idx) => (
-                          <span
-                            key={idx}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium"
-                          >
-                            <IconCheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                            {doc}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Location & Memo */}
-                    {ocrData.location && (
+                    {!isCertDoc && (
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1">
                           <IconMapPin className="w-3.5 h-3.5 text-slate-400" />
@@ -803,22 +974,22 @@ export const DocumentAnalyzerPage: React.FC = () => {
                         </label>
                         <input
                           type="text"
-                          value={ocrData.location}
+                          value={ocrData.location || ''}
                           onChange={e => setOcrData({ ...ocrData, location: e.target.value })}
-                          className="w-full text-xs px-3.5 py-2 border border-slate-200 rounded-xl"
+                          placeholder="예: 서울 강남구, 온라인"
+                          className={FIELD_CLASS}
                         />
                       </div>
                     )}
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">
-                        메모 / 유의사항
-                      </label>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">메모 / 유의사항</label>
                       <textarea
                         rows={2}
-                        value={ocrData.memo}
+                        value={ocrData.memo || ''}
                         onChange={e => setOcrData({ ...ocrData, memo: e.target.value })}
-                        className="w-full text-xs p-3 border border-slate-200 rounded-xl leading-relaxed text-slate-800"
+                        placeholder="준비할 것, 주의사항 등을 적어 두세요"
+                        className={FIELD_CLASS + ' leading-relaxed'}
                       />
                     </div>
 

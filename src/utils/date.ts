@@ -48,15 +48,22 @@ export function formatShortDate(dateStr: string): string {
   }
 }
 
+function toLocalDateKey(d: Date): string {
+  // toISOString() 은 UTC 기준이라 한국 시간 오전 9시 전에는 '어제' 날짜가 나옴 → 로컬 기준으로 계산
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function getTodayString(): string {
-  const d = new Date();
-  return d.toISOString().split('T')[0];
+  return toLocalDateKey(new Date());
 }
 
 export function getFutureDateString(daysAhead: number): string {
   const d = new Date();
   d.setDate(d.getDate() + daysAhead);
-  return d.toISOString().split('T')[0];
+  return toLocalDateKey(d);
 }
 
 export function getDaysInMonth(year: number, month: number): number {

@@ -32,7 +32,7 @@ const MainAppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex">
+    <div className="min-h-screen flex">
       {/* Sidebar Navigation */}
       <Sidebar
         isMobileOpen={isMobileSidebarOpen}
